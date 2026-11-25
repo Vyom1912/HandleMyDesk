@@ -1,0 +1,31 @@
+# Render Blueprint for the HandleMyDesk server. See DEPLOY.md.
+services:
+  - type: web
+    name: handlemydesk
+    runtime: node
+    plan: starter # a disk needs a paid plan; Free would erase the database on every restart
+    buildCommand: npm ci --include=dev
+    startCommand: npm start
+    healthCheckPath: /api/health
+    disk:
+      name: handlemydesk-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DATA_DIR
+        value: /var/data
+      - key: HTTPS
+        value: "true"
+      - key: TRUST_PROXY
+        value: "true"
+      # Render asks for these three when you create the Blueprint
+      - key: INITIAL_ADMIN_NAME
+        sync: false
+      - key: INITIAL_ADMIN_EMAIL
+        sync: false
+      - key: INITIAL_ADMIN_PASSWORD
+        sync: false
