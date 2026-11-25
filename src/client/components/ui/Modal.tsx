@@ -20,8 +20,11 @@ export function useDialogBehavior(open: boolean, onClose: () => void, ref: React
     const raf = requestAnimationFrame(() => {
       const el = ref.current;
       if (!el || el.contains(document.activeElement)) return;
-      const first = el.querySelector<HTMLElement>('[data-autofocus]') ?? el.querySelector<HTMLElement>(FOCUSABLE);
-      (first ?? el).focus();
+      // On touchscreens only focus fields marked for it: focusing anything else shows a stray
+      // focus ring, and focusing a text field pops the keyboard over the dialog.
+      const touch = window.matchMedia('(pointer: coarse)').matches;
+      const first = el.querySelector<HTMLElement>('[data-autofocus]') ?? (touch ? null : el.querySelector<HTMLElement>(FOCUSABLE));
+      (first ?? el).focus({ preventScroll: true });
     });
 
     const handleKey = (e: KeyboardEvent) => {
@@ -99,7 +102,7 @@ export const Modal: React.FC<ModalProps> = ({ open, onClose, title, description,
               </p>
             )}
           </div>
-          <button onClick={onClose} className="-mr-1 p-1 rounded-md text-fg-faint hover:text-fg hover:bg-hover" aria-label="Close dialog">
+          <button onClick={onClose} className="-mr-2 -mt-1 w-10 h-10 pointer-fine:w-7 pointer-fine:h-7 pointer-fine:-mr-1 pointer-fine:mt-0 flex items-center justify-center shrink-0 rounded-md text-fg-faint hover:text-fg hover:bg-hover" aria-label="Close dialog">
             <X size={16} />
           </button>
         </div>

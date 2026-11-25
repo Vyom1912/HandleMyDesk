@@ -242,10 +242,10 @@ export const TeamView: React.FC = () => {
                 <span className="text-[13px] text-fg-muted justify-self-end md:justify-self-start" title={ROLE_HELP[emp.role]}>
                   {label(emp.role)}
                 </span>
-                <a href={`mailto:${emp.email}`} className="hidden md:block text-[13px] text-fg-muted truncate hover:text-accent-ink hover:underline underline-offset-2">
+                <a href={`mailto:${emp.email}`} className="hidden md:block py-2.5 -my-2.5 pointer-fine:py-0 pointer-fine:my-0 text-[13px] text-fg-muted truncate hover:text-accent-ink hover:underline underline-offset-2">
                   {emp.email}
                 </a>
-                <a href={`tel:${emp.phone}`} className="hidden md:block text-[13px] text-fg-muted tabular-nums hover:text-accent-ink">
+                <a href={`tel:${emp.phone}`} className="hidden md:block py-2.5 -my-2.5 pointer-fine:py-0 pointer-fine:my-0 text-[13px] text-fg-muted tabular-nums hover:text-accent-ink">
                   {emp.phone}
                 </a>
                 {isAdmin && (

@@ -1,16 +1,13 @@
 import React from 'react';
-import { Menu, ChevronsRight } from 'lucide-react';
+import { ChevronsRight } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
 /** Thin top bar shared by every page: sidebar toggle, breadcrumb trail and page actions. */
 export const TopBar: React.FC<{ crumbs: React.ReactNode[]; actions?: React.ReactNode }> = ({ crumbs, actions }) => {
-  const { sidebarCollapsed, setSidebarCollapsed, setMobileNavOpen } = useApp();
+  const { sidebarCollapsed, setSidebarCollapsed } = useApp();
   return (
     <div className="h-11 shrink-0 flex items-center justify-between gap-2 px-3 border-b border-line bg-canvas">
       <div className="flex items-center gap-1 min-w-0">
-        <button onClick={() => setMobileNavOpen(true)} className="lg:hidden w-7 h-7 flex items-center justify-center rounded-md text-fg-muted hover:bg-hover" aria-label="Open sidebar">
-          <Menu size={16} />
-        </button>
         {sidebarCollapsed && (
           <button
             onClick={() => setSidebarCollapsed(false)}
@@ -24,7 +21,8 @@ export const TopBar: React.FC<{ crumbs: React.ReactNode[]; actions?: React.React
         <nav aria-label="Breadcrumb" className="min-w-0">
           <ol className="flex items-center gap-1 text-sm min-w-0">
             {crumbs.map((c, i) => (
-              <li key={i} className={`flex items-center gap-1 min-w-0 ${i === crumbs.length - 1 ? 'text-fg' : 'text-fg-muted'}`}>
+              // Only the last crumb (usually a long name) shortens; earlier ones stay readable
+              <li key={i} className={`flex items-center gap-1 ${i === crumbs.length - 1 ? 'text-fg min-w-0' : 'text-fg-muted shrink-0'}`}>
                 {i > 0 && (
                   <span className="text-fg-faint" aria-hidden="true">
                     /

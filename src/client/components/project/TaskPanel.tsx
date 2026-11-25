@@ -11,7 +11,7 @@ import { Markdown } from '../ui/Markdown';
 import { TASK_STATUS_OPTIONS } from './sections/TasksSection';
 
 const propSelect =
-  'h-8 w-full pl-2 pr-7 bg-transparent border border-transparent hover:border-line rounded-md text-sm text-fg focus:outline-none focus:border-accent';
+  'h-10 pointer-fine:h-8 w-full pl-2 pr-7 bg-transparent border border-transparent hover:border-line rounded-md text-base pointer-fine:text-sm text-fg focus:outline-none focus:border-accent';
 
 const Row: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
   <div className="grid grid-cols-[110px_minmax(0,1fr)] items-center gap-2 min-h-9">
@@ -308,7 +308,7 @@ export const TaskPanel: React.FC<{ taskId: string; onClose: () => void }> = ({ t
             <span className="font-mono">{project.code}</span> · Task
           </span>
           <div className="flex items-center gap-0.5">
-            <button onClick={copyLink} className="h-7 px-2 flex items-center gap-1.5 rounded-md text-[13px] text-fg-muted hover:bg-hover hover:text-fg">
+            <button onClick={copyLink} className="h-10 pointer-fine:h-7 px-2.5 pointer-fine:px-2 flex items-center gap-1.5 rounded-md text-[13px] text-fg-muted hover:bg-hover hover:text-fg">
               <LinkIcon size={14} /> Copy link
             </button>
             <IconButton
@@ -327,10 +327,9 @@ export const TaskPanel: React.FC<{ taskId: string; onClose: () => void }> = ({ t
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-6">
+        <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-5 space-y-6" style={{ paddingBottom: "calc(1.25rem + env(safe-area-inset-bottom))" }}>
           <textarea
             id="task-panel-title"
-            data-autofocus
             rows={1}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
@@ -342,7 +341,7 @@ export const TaskPanel: React.FC<{ taskId: string; onClose: () => void }> = ({ t
               }
             }}
             aria-label="Task title"
-            className="w-full resize-none bg-transparent text-xl font-semibold text-fg leading-snug focus:outline-none [field-sizing:content]"
+            className="w-full resize-none bg-transparent text-lg sm:text-xl font-semibold text-fg leading-snug focus:outline-none [field-sizing:content]"
           />
 
           <div className="space-y-0.5">
@@ -386,7 +385,7 @@ export const TaskPanel: React.FC<{ taskId: string; onClose: () => void }> = ({ t
                 {task.tags.map((t) => (
                   <span key={t} className="inline-flex items-center gap-0.5 h-6 pl-2 pr-0.5 rounded bg-tone-gray-bg text-[13px] text-tone-gray-fg">
                     {t}
-                    <button onClick={() => patch({ tags: task.tags.filter((x) => x !== t) })} className="w-5 h-5 flex items-center justify-center rounded hover:bg-selected" aria-label={`Remove tag ${t}`}>
+                    <button onClick={() => patch({ tags: task.tags.filter((x) => x !== t) })} className="w-8 h-8 -my-1.5 -mr-1 pointer-fine:w-5 pointer-fine:h-5 pointer-fine:my-0 pointer-fine:mr-0 flex items-center justify-center rounded hover:bg-selected" aria-label={`Remove tag ${t}`}>
                       <X size={11} />
                     </button>
                   </span>
@@ -403,7 +402,7 @@ export const TaskPanel: React.FC<{ taskId: string; onClose: () => void }> = ({ t
                   onBlur={addTag}
                   placeholder={task.tags.length ? 'Add…' : 'Add a tag'}
                   aria-label="Add a tag"
-                  className="h-6 w-24 px-1 bg-transparent text-[13px] text-fg placeholder:text-fg-faint focus:outline-none"
+                  className="h-10 pointer-fine:h-6 w-28 px-1 bg-transparent text-base pointer-fine:text-[13px] text-fg placeholder:text-fg-faint focus:outline-none"
                 />
               </div>
             </Row>
@@ -423,7 +422,7 @@ export const TaskPanel: React.FC<{ taskId: string; onClose: () => void }> = ({ t
                     setDescription(task.description);
                     setEditingDescription(true);
                   }}
-                  className="h-7 px-2 flex items-center gap-1.5 rounded-md text-[13px] text-fg-muted hover:bg-hover hover:text-fg"
+                  className="h-10 pointer-fine:h-7 px-2.5 pointer-fine:px-2 flex items-center gap-1.5 rounded-md text-[13px] text-fg-muted hover:bg-hover hover:text-fg"
                 >
                   <Pencil size={13} /> Edit
                 </button>
@@ -479,13 +478,13 @@ export const TaskPanel: React.FC<{ taskId: string; onClose: () => void }> = ({ t
             )}
             <ul className="space-y-px">
               {task.subtasks.map((s) => (
-                <li key={s.id} className="group flex items-center gap-2 h-8 px-1 rounded hover:bg-subtle">
+                <li key={s.id} className="group flex items-center gap-2 h-11 pointer-fine:h-8 px-1 rounded hover:bg-subtle">
                   <button
                     role="checkbox"
                     aria-checked={s.completed}
                     aria-label={s.title}
                     onClick={() => patch({ subtasks: task.subtasks.map((x) => (x.id === s.id ? { ...x, completed: !x.completed } : x)) })}
-                    className={`w-4 h-4 shrink-0 rounded-[4px] border flex items-center justify-center ${s.completed ? 'bg-accent border-accent text-on-accent' : 'border-line-strong bg-surface'}`}
+                    className={`w-[18px] h-[18px] pointer-fine:w-4 pointer-fine:h-4 shrink-0 rounded-[4px] border flex items-center justify-center outline-offset-[10px] pointer-fine:outline-offset-1 relative before:absolute before:-inset-3 pointer-fine:before:hidden ${s.completed ? 'bg-accent border-accent text-on-accent' : 'border-line-strong bg-surface'}`}
                   >
                     {s.completed && <Check size={11} strokeWidth={3} />}
                   </button>
@@ -501,7 +500,7 @@ export const TaskPanel: React.FC<{ taskId: string; onClose: () => void }> = ({ t
                 </li>
               ))}
             </ul>
-            <div className="flex items-center gap-2 h-8 px-1">
+            <div className="flex items-center gap-2 h-11 pointer-fine:h-8 px-1">
               <Plus size={14} className="text-fg-faint shrink-0" />
               <input
                 value={newItem}
@@ -509,7 +508,7 @@ export const TaskPanel: React.FC<{ taskId: string; onClose: () => void }> = ({ t
                 onKeyDown={(e) => e.key === 'Enter' && addItem()}
                 placeholder="Add an item"
                 aria-label="Add a checklist item"
-                className="flex-1 bg-transparent text-sm text-fg placeholder:text-fg-faint focus:outline-none"
+                className="flex-1 h-full bg-transparent text-sm text-fg placeholder:text-fg-faint focus:outline-none"
               />
             </div>
           </section>

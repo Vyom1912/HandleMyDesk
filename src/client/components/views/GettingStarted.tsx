@@ -87,7 +87,7 @@ export const GettingStarted: React.FC = () => {
         </div>
         <button
           onClick={() => markOnboarding(currentUser.id, 'dismissed')}
-          className="h-7 px-2 flex items-center gap-1 rounded-md text-[13px] text-fg-muted hover:text-fg hover:bg-hover"
+          className="h-10 pointer-fine:h-7 px-2.5 pointer-fine:px-2 flex items-center gap-1 rounded-md text-[13px] text-fg-muted hover:text-fg hover:bg-hover"
           aria-label="Hide the getting started checklist"
         >
           <X size={14} /> Hide

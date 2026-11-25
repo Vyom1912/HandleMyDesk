@@ -42,7 +42,7 @@ const Preferences: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 
   return (
     <div className="flex-1 overflow-y-auto px-4 py-4">
-      <button onClick={onBack} className="flex items-center gap-1.5 h-7 px-1.5 -ml-1.5 rounded-md text-[13px] text-fg-muted hover:text-fg hover:bg-hover mb-3">
+      <button onClick={onBack} className="flex items-center gap-1.5 h-10 pointer-fine:h-7 px-1.5 -ml-1.5 rounded-md text-[13px] text-fg-muted hover:text-fg hover:bg-hover mb-3">
         <ArrowLeft size={14} /> Back to inbox
       </button>
       <h3 className="text-sm font-semibold text-fg">Notify me about</h3>
@@ -57,7 +57,7 @@ const Preferences: React.FC<{ onBack: () => void }> = ({ onBack }) => {
             const on = !muted.includes(kind);
             return (
               <li key={kind}>
-                <label className="flex items-center justify-between gap-3 h-10 px-2 rounded-md hover:bg-hover cursor-pointer">
+                <label className="flex items-center justify-between gap-3 h-12 pointer-fine:h-10 px-2 rounded-md hover:bg-hover cursor-pointer">
                   <span className="text-sm text-fg">{label}</span>
                   <input type="checkbox" role="switch" checked={on} onChange={() => toggle(kind)} className="sr-only peer" />
                   <span
@@ -106,23 +106,23 @@ export const NotificationsDrawer: React.FC = () => {
 
   return (
     <div className="fixed inset-0 bg-overlay z-50 flex justify-end animate-fade-in" onMouseDown={(e) => e.target === e.currentTarget && close()}>
-      <div ref={ref} role="dialog" aria-modal="true" aria-labelledby="inbox-title" className="bg-surface border-l border-line w-full max-w-sm h-full flex flex-col shadow-[0_0_40px_rgb(0_0_0/0.12)]">
+      <div ref={ref} role="dialog" aria-modal="true" aria-labelledby="inbox-title" tabIndex={-1} className="focus:outline-none bg-surface sm:border-l border-line w-full sm:max-w-sm h-full flex flex-col shadow-[0_0_40px_rgb(0_0_0/0.12)]">
         <div className="h-12 px-4 border-b border-line flex items-center justify-between gap-2">
           <h2 id="inbox-title" className="text-[15px] font-semibold text-fg">
             {showPrefs ? 'Notification settings' : 'Inbox'}
           </h2>
           <div className="flex items-center gap-1">
             {!showPrefs && notificationCount > 0 && (
-              <button onClick={markAllNotificationsRead} className="h-7 px-2 rounded-md text-[13px] text-fg-muted hover:text-fg hover:bg-hover">
+              <button onClick={markAllNotificationsRead} className="h-10 pointer-fine:h-7 px-2.5 pointer-fine:px-2 rounded-md text-[13px] text-fg-muted hover:text-fg hover:bg-hover">
                 Mark all read
               </button>
             )}
             {!showPrefs && (
-              <button onClick={() => setShowPrefs(true)} className="w-7 h-7 flex items-center justify-center rounded-md text-fg-faint hover:text-fg hover:bg-hover" aria-label="Notification settings" title="Notification settings">
+              <button onClick={() => setShowPrefs(true)} className="w-10 h-10 pointer-fine:w-7 pointer-fine:h-7 flex items-center justify-center rounded-md text-fg-faint hover:text-fg hover:bg-hover" aria-label="Notification settings" title="Notification settings">
                 <Settings size={15} />
               </button>
             )}
-            <button onClick={close} className="w-7 h-7 flex items-center justify-center rounded-md text-fg-faint hover:text-fg hover:bg-hover" aria-label="Close inbox">
+            <button onClick={close} className="w-10 h-10 pointer-fine:w-7 pointer-fine:h-7 flex items-center justify-center rounded-md text-fg-faint hover:text-fg hover:bg-hover" aria-label="Close inbox">
               <X size={16} />
             </button>
           </div>
@@ -179,7 +179,7 @@ export const NotificationsDrawer: React.FC = () => {
                       {!notif.read && (
                         <button
                           onClick={() => markNotificationRead(notif.id)}
-                          className="w-7 h-7 flex items-center justify-center rounded-md text-fg-faint hover:text-fg hover:bg-hover opacity-0 group-hover:opacity-100 focus:opacity-100"
+                          className="w-10 h-10 pointer-fine:w-7 pointer-fine:h-7 flex items-center justify-center rounded-md text-fg-faint hover:text-fg hover:bg-hover opacity-0 group-hover:opacity-100 focus:opacity-100"
                           aria-label={`Mark "${notif.title}" as read`}
                         >
                           <Check size={14} />
@@ -197,7 +197,7 @@ export const NotificationsDrawer: React.FC = () => {
                       loadMoreNotifications().finally(() => setLoadingMore(false));
                     }}
                     disabled={loadingMore}
-                    className="h-7 px-3 rounded-md border border-line text-[13px] text-fg-muted hover:text-fg hover:bg-hover disabled:opacity-50"
+                    className="h-10 pointer-fine:h-7 px-3 rounded-md border border-line text-[13px] text-fg-muted hover:text-fg hover:bg-hover disabled:opacity-50"
                   >
                     {loadingMore ? 'Loading…' : 'Load older notifications'}
                   </button>

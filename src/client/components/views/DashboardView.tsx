@@ -71,11 +71,11 @@ export const DashboardView: React.FC = () => {
         ].map((k, i) => {
           const body = (
             <>
-              <div className="text-2xl font-semibold text-fg tabular-nums">{k.value ?? '–'}</div>
+              <div className="text-lg sm:text-2xl font-semibold text-fg tabular-nums break-words">{k.value ?? '–'}</div>
               <div className="text-[13px] text-fg-muted mt-0.5">{k.label}</div>
             </>
           );
-          const cls = `text-left px-5 py-4 ${i >= 2 ? 'border-t lg:border-t-0 border-line' : ''}`;
+          const cls = `text-left px-4 sm:px-5 py-3.5 sm:py-4 ${i >= 2 ? 'border-t lg:border-t-0 border-line' : ''}`;
           return k.onClick ? (
             <button key={k.label} onClick={k.onClick} className={`${cls} hover:bg-subtle`}>
               {body}
@@ -93,7 +93,7 @@ export const DashboardView: React.FC = () => {
           <section>
             <SectionTitle
               action={
-                <button onClick={() => navigate({ view: 'tasks' })} className="text-[13px] text-fg-muted hover:text-fg">
+                <button onClick={() => navigate({ view: 'tasks' })} className="py-2.5 -my-2.5 pointer-fine:py-0 pointer-fine:my-0 text-[13px] text-fg-muted hover:text-fg">
                   All my tasks →
                 </button>
               }

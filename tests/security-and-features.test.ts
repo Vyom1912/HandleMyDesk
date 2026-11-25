@@ -290,7 +290,8 @@ describe('Office workflow', () => {
 });
 
 describe('Many people at once', () => {
-  it('signs everyone in concurrently and each session only ever sees its own user and data', async () => {
+  // 18 deliberately slow password checks at once: allow time on a busy machine
+  it('signs everyone in concurrently and each session only ever sees its own user and data', { timeout: 20000 }, async () => {
     const users = db.getData().users;
     const logins = await Promise.all(
       users.map((u) => request(app).post('/api/auth/login').send({ email: u.email, password: SEED_PASSWORD }))

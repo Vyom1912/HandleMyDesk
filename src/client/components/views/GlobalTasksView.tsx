@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Check, Download } from 'lucide-react';
+import { Download } from 'lucide-react';
+import { TaskCheckbox } from '../project/sections/TasksSection';
 import { downloadCsv } from '../../services/exports';
 import { Button } from '../ui/Field';
 import { useApp } from '../../context/AppContext';
@@ -119,18 +120,8 @@ export const GlobalTasksView: React.FC = () => {
               </h2>
               <ul className="border border-line rounded-lg divide-y divide-line">
                 {g.items.map((task) => (
-                  <li key={task.id} className="flex items-center gap-3 px-3 py-2 hover:bg-subtle">
-                    <button
-                      onClick={() => toggle(task)}
-                      role="checkbox"
-                      aria-checked={task.status === 'done'}
-                      aria-label={`Mark “${task.title}” as ${task.status === 'done' ? 'not done' : 'done'}`}
-                      className={`w-4 h-4 shrink-0 rounded-[4px] border flex items-center justify-center ${
-                        task.status === 'done' ? 'bg-accent border-accent text-on-accent' : 'border-line-strong hover:border-fg-faint bg-surface'
-                      }`}
-                    >
-                      {task.status === 'done' && <Check size={11} strokeWidth={3} />}
-                    </button>
+                  <li key={task.id} className="flex items-center gap-3 px-3 py-2.5 pointer-fine:py-2 hover:bg-subtle">
+                    <TaskCheckbox task={task} onToggle={() => toggle(task)} />
                     <button onClick={() => openProject(task.projectId, 'tasks', task.id)} className="flex-1 min-w-0 text-left">
                       <span className={`block text-sm truncate ${task.status === 'done' ? 'line-through text-fg-faint' : 'text-fg'}`}>{task.title}</span>
                       <span className="block text-xs text-fg-faint truncate">

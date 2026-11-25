@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, RefreshCw, LogOut } from 'lucide-react';
 import { useApp } from './context/AppContext';
 import { Sidebar } from './components/layout/Sidebar';
+import { BottomNav } from './components/layout/BottomNav';
 import { ProjectWorkspace } from './components/project/ProjectWorkspace';
 import { DashboardView } from './components/views/DashboardView';
 import { ProjectDirectoryView } from './components/views/ProjectDirectoryView';
@@ -36,7 +37,7 @@ const MobileSidebar: React.FC = () => {
   if (!mobileNavOpen) return null;
   return (
     <div className="lg:hidden fixed inset-0 z-40 bg-overlay animate-fade-in" onMouseDown={(e) => e.target === e.currentTarget && setMobileNavOpen(false)}>
-      <div ref={ref} role="dialog" aria-modal="true" aria-label="Sidebar" className="h-full w-[280px] max-w-[85vw] shadow-xl">
+      <div ref={ref} role="dialog" aria-modal="true" aria-label="Sidebar" tabIndex={-1} className="focus:outline-none h-full w-[300px] max-w-[85vw] shadow-xl">
         <Sidebar />
       </div>
     </div>
@@ -117,7 +118,7 @@ export const App: React.FC = () => {
   }
 
   return (
-    <div className="flex h-[100dvh] w-full bg-canvas text-fg overflow-hidden">
+    <div className="flex h-[100dvh] w-full bg-canvas text-fg overflow-hidden" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
       <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[70] focus:px-3 focus:py-2 focus:rounded-md focus:bg-accent focus:text-on-accent">
         Skip to content
       </a>
@@ -128,8 +129,10 @@ export const App: React.FC = () => {
         </aside>
       )}
       <MobileSidebar />
+      <BottomNav />
 
-      <main id="main-content" tabIndex={-1} className="flex-1 flex flex-col min-w-0 min-h-0 focus:outline-none">
+      {/* Below laptop width the bottom bar takes 56 px (plus the home-indicator area) */}
+      <main id="main-content" tabIndex={-1} className="flex-1 flex flex-col min-w-0 min-h-0 focus:outline-none pb-[calc(3.5rem+env(safe-area-inset-bottom))] lg:pb-0">
         {route.view === 'home' ? (
           <DashboardView />
         ) : route.view === 'projects' ? (

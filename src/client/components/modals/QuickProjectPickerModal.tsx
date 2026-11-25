@@ -162,7 +162,7 @@ export const QuickProjectPickerModal: React.FC = () => {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={handleKeyDown}
-            className="w-full bg-transparent text-[15px] text-fg placeholder:text-fg-faint focus:outline-none"
+            className="w-full h-full bg-transparent text-base text-fg placeholder:text-fg-faint focus:outline-none"
           />
           <kbd className="text-[11px] text-fg-faint border border-line rounded px-1.5 py-0.5 font-sans">Esc</kbd>
         </div>
@@ -186,7 +186,7 @@ export const QuickProjectPickerModal: React.FC = () => {
                   aria-selected={index === highlight}
                   onClick={() => choose(r)}
                   onMouseMove={() => setHighlight(index)}
-                  className={`flex items-center gap-2.5 h-9 px-2 rounded-md cursor-pointer ${index === highlight ? 'bg-hover' : ''}`}
+                  className={`flex items-center gap-2.5 h-11 pointer-fine:h-9 px-2 rounded-md cursor-pointer ${index === highlight ? 'bg-hover' : ''}`}
                 >
                   <span className="w-4 flex justify-center shrink-0">{r.icon}</span>
                   <span className="text-sm text-fg truncate">{r.title}</span>

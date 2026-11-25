@@ -63,7 +63,8 @@ function readExpanded(userId: string): string[] {
   }
 }
 
-const rowBase = 'group flex items-center gap-2 w-full h-7 px-2 rounded-md text-sm text-left transition-colors';
+// Finger-sized rows on touchscreens (the sidebar opens from Menu there); compact with a mouse
+const rowBase = 'group flex items-center gap-2.5 pointer-fine:gap-2 w-full h-10 pointer-fine:h-7 px-2.5 pointer-fine:px-2 rounded-md text-[15px] pointer-fine:text-sm text-left transition-colors';
 const rowIdle = 'text-fg-muted hover:bg-hover hover:text-fg';
 const rowActive = 'bg-selected text-fg font-medium';
 
@@ -142,7 +143,7 @@ export const Sidebar: React.FC = () => {
         <div className={`${rowBase} pl-1 pr-1 ${isActive && route.view === 'project' && route.section === 'overview' ? rowActive : isActive ? 'text-fg' : rowIdle}`}>
           <button
             onClick={() => toggleExpanded(expandKey)}
-            className="w-5 h-5 shrink-0 flex items-center justify-center rounded text-fg-faint hover:bg-selected"
+            className="w-8 h-8 pointer-fine:w-5 pointer-fine:h-5 shrink-0 flex items-center justify-center rounded text-fg-faint hover:bg-selected"
             aria-label={`${isOpen ? 'Collapse' : 'Expand'} ${project.name}`}
             aria-expanded={isOpen}
           >
@@ -154,7 +155,7 @@ export const Sidebar: React.FC = () => {
           </button>
           <button
             onClick={() => toggleFavorite(project.id)}
-            className={`w-5 h-5 shrink-0 flex items-center justify-center rounded hover:bg-selected ${isFavorite ? 'text-tone-amber-fg' : 'text-fg-faint opacity-0 group-hover:opacity-100 focus:opacity-100'}`}
+            className={`w-8 h-8 pointer-fine:w-5 pointer-fine:h-5 shrink-0 flex items-center justify-center rounded hover:bg-selected ${isFavorite ? 'text-tone-amber-fg' : 'text-fg-faint opacity-0 group-hover:opacity-100 focus:opacity-100'}`}
             aria-label={isFavorite ? `Remove ${project.name} from favorites` : `Add ${project.name} to favorites`}
             aria-pressed={isFavorite}
           >
@@ -167,7 +168,7 @@ export const Sidebar: React.FC = () => {
               const sectionActive = isActive && route.view === 'project' && route.section === s.id;
               return (
                 <li key={s.id}>
-                  <button onClick={() => openProject(project.id, s.id)} className={`${rowBase} h-[26px] text-[13px] ${sectionActive ? rowActive : rowIdle}`} aria-current={sectionActive ? 'page' : undefined}>
+                  <button onClick={() => openProject(project.id, s.id)} className={`${rowBase} h-9 pointer-fine:h-[26px] text-sm pointer-fine:text-[13px] ${sectionActive ? rowActive : rowIdle}`} aria-current={sectionActive ? 'page' : undefined}>
                     <s.icon size={13} className="shrink-0 opacity-70" />
                     {s.label}
                   </button>
@@ -181,7 +182,7 @@ export const Sidebar: React.FC = () => {
   };
 
   const groupLabel = (children: React.ReactNode, action?: React.ReactNode) => (
-    <div className="flex items-center justify-between h-7 px-2 mt-4 mb-0.5">
+    <div className="flex items-center justify-between h-9 pointer-fine:h-7 px-2 mt-4 mb-0.5">
       <span className="text-xs font-medium text-fg-faint">{children}</span>
       {action}
     </div>
@@ -204,7 +205,7 @@ export const Sidebar: React.FC = () => {
             aria-haspopup="menu"
             aria-expanded={menuOpen}
           >
-            <span className="w-5 h-5 rounded bg-fg text-canvas text-[11px] font-bold flex items-center justify-center shrink-0" aria-hidden="true">
+            <span className="w-6 h-6 pointer-fine:w-5 pointer-fine:h-5 rounded bg-fg text-canvas text-[11px] font-bold flex items-center justify-center shrink-0" aria-hidden="true">
               N
             </span>
             <span className="flex-1 min-w-0 text-left">
@@ -218,7 +219,7 @@ export const Sidebar: React.FC = () => {
               setSidebarCollapsed(true);
               setMobileNavOpen(false);
             }}
-            className="w-7 h-7 flex items-center justify-center rounded-md text-fg-faint hover:bg-hover hover:text-fg"
+            className="w-10 h-10 pointer-fine:w-7 pointer-fine:h-7 flex items-center justify-center rounded-md text-fg-faint hover:bg-hover hover:text-fg"
             aria-label="Hide sidebar (Ctrl+\)"
             title="Hide sidebar (Ctrl+\)"
           >
@@ -350,7 +351,7 @@ export const Sidebar: React.FC = () => {
           canCreate && (
               <button
                 onClick={() => setIsCreateProjectOpen(true)}
-                className="w-5 h-5 flex items-center justify-center rounded text-fg-faint hover:bg-hover hover:text-fg"
+                className="w-8 h-8 pointer-fine:w-5 pointer-fine:h-5 flex items-center justify-center rounded text-fg-faint hover:bg-hover hover:text-fg"
                 aria-label="New project"
                 title="New project"
               >
@@ -372,7 +373,7 @@ export const Sidebar: React.FC = () => {
 
         {closedProjects.length > 0 && (
           <>
-            <button onClick={() => setShowClosed((s) => !s)} className="flex items-center gap-1 h-7 px-2 mt-3 text-xs font-medium text-fg-faint hover:text-fg" aria-expanded={showClosed}>
+            <button onClick={() => setShowClosed((s) => !s)} className="flex items-center gap-1 h-10 pointer-fine:h-7 px-2 mt-3 text-xs font-medium text-fg-faint hover:text-fg" aria-expanded={showClosed}>
               <ChevronRight size={12} className={`transition-transform ${showClosed ? 'rotate-90' : ''}`} />
               Completed & archived ({closedProjects.length})
             </button>

@@ -1,16 +1,20 @@
 import React from 'react';
 
+/*
+ * Sizing is touch-first: comfortable 44 px controls and 16 px text (smaller text makes phones
+ * zoom into the field). Devices with a mouse or trackpad (pointer-fine) get the compact sizes.
+ */
 export const inputClass =
-  'w-full h-9 px-2.5 bg-surface border border-line-strong rounded-md text-sm text-fg placeholder:text-fg-faint focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/15 disabled:opacity-60 disabled:bg-subtle';
+  'w-full h-11 pointer-fine:h-9 px-3 pointer-fine:px-2.5 bg-surface border border-line-strong rounded-md text-base pointer-fine:text-sm text-fg placeholder:text-fg-faint focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/15 disabled:opacity-60 disabled:bg-subtle';
 
 export const textareaClass =
-  'w-full px-2.5 py-2 bg-surface border border-line-strong rounded-md text-sm text-fg placeholder:text-fg-faint focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/15 disabled:opacity-60';
+  'w-full px-3 pointer-fine:px-2.5 py-2.5 pointer-fine:py-2 bg-surface border border-line-strong rounded-md text-base pointer-fine:text-sm text-fg placeholder:text-fg-faint focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/15 disabled:opacity-60';
 
 export const selectClass = `${inputClass} pr-8`;
 
 // Compact select used in toolbars
 export const toolbarSelectClass =
-  'h-8 pl-2.5 pr-7 bg-surface border border-line rounded-md text-[13px] text-fg focus:outline-none focus:border-accent';
+  'h-10 pointer-fine:h-8 pl-3 pointer-fine:pl-2.5 pr-8 pointer-fine:pr-7 bg-surface border border-line rounded-md text-base pointer-fine:text-[13px] text-fg focus:outline-none focus:border-accent';
 
 // Wrapping the control in the <label> associates them without needing ids
 export const Field: React.FC<{ label: string; required?: boolean; hint?: string; className?: string; children: React.ReactNode }> = ({
@@ -54,7 +58,9 @@ export const Button: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & { 
   <button
     type={type}
     className={`inline-flex items-center justify-center gap-1.5 rounded-md font-medium whitespace-nowrap transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-      size === 'sm' ? 'h-7 px-2.5 text-[13px]' : 'h-8 px-3 text-sm'
+      size === 'sm'
+        ? 'h-9 px-3 text-sm pointer-fine:h-7 pointer-fine:px-2.5 pointer-fine:text-[13px]'
+        : 'h-11 px-4 text-[15px] pointer-fine:h-8 pointer-fine:px-3 pointer-fine:text-sm'
     } ${VARIANTS[variant]} ${className}`}
     {...props}
   />
@@ -70,7 +76,7 @@ export const IconButton: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> 
     type="button"
     aria-label={label}
     title={label}
-    className={`inline-flex items-center justify-center w-7 h-7 rounded-md text-fg-faint transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+    className={`inline-flex items-center justify-center w-10 h-10 pointer-fine:w-7 pointer-fine:h-7 shrink-0 rounded-md text-fg-faint transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
       danger ? 'hover:text-tone-red-fg hover:bg-tone-red-bg' : 'hover:text-fg hover:bg-hover'
     } ${className}`}
     {...props}
@@ -116,7 +122,7 @@ export const SearchInput: React.FC<{ value: string; onChange: (v: string) => voi
       placeholder={placeholder}
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="w-full h-8 pl-8 pr-2.5 bg-surface border border-line rounded-md text-[13px] text-fg placeholder:text-fg-faint focus:outline-none focus:border-accent"
+      className="w-full h-10 pointer-fine:h-8 pl-8 pr-2.5 bg-surface border border-line rounded-md text-base pointer-fine:text-[13px] text-fg placeholder:text-fg-faint focus:outline-none focus:border-accent"
     />
   </div>
 );
@@ -134,13 +140,13 @@ export function Segmented<T extends string>({
   label: string;
 }) {
   return (
-    <div role="group" aria-label={label} className="inline-flex items-center h-8 p-0.5 bg-subtle border border-line rounded-md">
+    <div role="group" aria-label={label} className="inline-flex items-center h-10 pointer-fine:h-8 p-0.5 bg-subtle border border-line rounded-md max-w-full overflow-x-auto no-scrollbar">
       {options.map((o) => (
         <button
           key={o.value}
           onClick={() => onChange(o.value)}
           aria-pressed={value === o.value}
-          className={`h-full px-2.5 rounded text-[13px] transition-colors ${
+          className={`h-full px-3 pointer-fine:px-2.5 rounded text-sm pointer-fine:text-[13px] whitespace-nowrap transition-colors ${
             value === o.value ? 'bg-surface text-fg font-medium shadow-[0_1px_2px_rgb(0_0_0/0.08)]' : 'text-fg-muted hover:text-fg'
           }`}
         >

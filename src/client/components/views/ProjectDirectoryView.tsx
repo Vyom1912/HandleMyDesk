@@ -98,7 +98,7 @@ export const ProjectDirectoryView: React.FC = () => {
                 <li key={p.id} className="group grid grid-cols-[28px_minmax(0,1fr)_auto] lg:grid-cols-[28px_minmax(0,1fr)_150px_110px_160px_100px_90px] gap-x-3 gap-y-1 px-3 py-2.5 items-center hover:bg-subtle">
                   <button
                     onClick={() => toggleFavorite(p.id)}
-                    className={`w-6 h-6 flex items-center justify-center rounded hover:bg-hover ${fav ? 'text-tone-amber-fg' : 'text-fg-faint opacity-40 group-hover:opacity-100 focus:opacity-100'}`}
+                    className={`w-10 h-10 -m-2 pointer-fine:w-6 pointer-fine:h-6 pointer-fine:m-0 flex items-center justify-center rounded hover:bg-hover ${fav ? 'text-tone-amber-fg' : 'text-fg-faint opacity-40 group-hover:opacity-100 focus:opacity-100'}`}
                     aria-label={fav ? `Remove ${p.name} from favorites` : `Add ${p.name} to favorites`}
                     aria-pressed={fav}
                   >

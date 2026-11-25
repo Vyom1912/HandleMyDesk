@@ -13,11 +13,17 @@ export const TaskCheckbox: React.FC<{ task: Task; onToggle: () => void }> = ({ t
     role="checkbox"
     aria-checked={task.status === 'done'}
     aria-label={`Mark “${task.title}” as ${task.status === 'done' ? 'not done' : 'done'}`}
-    className={`w-4 h-4 shrink-0 rounded-[4px] border flex items-center justify-center transition-colors ${
-      task.status === 'done' ? 'bg-accent border-accent text-on-accent' : 'border-line-strong hover:border-fg-faint bg-surface'
-    }`}
+    // The visible box stays small; on touchscreens the button around it is finger-sized
+    className="group/check shrink-0 flex items-center justify-center w-10 h-10 -m-3 pointer-fine:w-4 pointer-fine:h-4 pointer-fine:m-0"
   >
-    {task.status === 'done' && <Check size={11} strokeWidth={3} />}
+    <span
+      aria-hidden="true"
+      className={`w-[18px] h-[18px] pointer-fine:w-4 pointer-fine:h-4 rounded-[4px] border flex items-center justify-center transition-colors ${
+        task.status === 'done' ? 'bg-accent border-accent text-on-accent' : 'border-line-strong group-hover/check:border-fg-faint bg-surface'
+      }`}
+    >
+      {task.status === 'done' && <Check size={11} strokeWidth={3} />}
+    </span>
   </button>
 );
 
@@ -52,14 +58,14 @@ export const TasksSection: React.FC = () => {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <SearchInput value={search} onChange={setSearch} placeholder="Search tasks or tags" label="Search tasks" className="w-full sm:w-60" />
-        <select aria-label="Filter by status" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className={toolbarSelectClass}>
+        <select aria-label="Filter by status" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className={`${toolbarSelectClass} flex-1 sm:flex-none`}>
           {STATUS_FILTERS.map((f) => (
             <option key={f.value} value={f.value}>
               {f.label}
             </option>
           ))}
         </select>
-        <select aria-label="Filter by assignee" value={assigneeFilter} onChange={(e) => setAssigneeFilter(e.target.value)} className={toolbarSelectClass}>
+        <select aria-label="Filter by assignee" value={assigneeFilter} onChange={(e) => setAssigneeFilter(e.target.value)} className={`${toolbarSelectClass} flex-1 sm:flex-none min-w-0`}>
           <option value="all">Everyone</option>
           {teamMembers.map((m) => (
             <option key={m.id} value={m.id}>
@@ -72,8 +78,10 @@ export const TasksSection: React.FC = () => {
           className="ml-auto"
           onClick={() => downloadCsv(`/api/projects/${projectId}/export/tasks.csv`, `${project.code}-tasks`).catch((err) => showToast(err.message, 'error'))}
           title="All of this project's tasks, as a spreadsheet"
+          aria-label="Export tasks as CSV"
         >
-          <Download size={15} /> Export
+          <Download size={15} />
+          <span className="hidden sm:inline">Export</span>
         </Button>
         <Button onClick={() => openTaskEditor()}>
           <Plus size={15} /> New task
@@ -110,7 +118,7 @@ export const TasksSection: React.FC = () => {
                   <div className="flex items-center gap-3 min-w-0">
                     <TaskCheckbox task={task} onToggle={() => updateTask(task, { status: task.status === 'done' ? 'todo' : 'done' })} />
                     <div className="min-w-0">
-                      <button onClick={() => openTaskEditor(task)} className={`block text-sm text-left truncate max-w-full hover:underline underline-offset-2 ${task.status === 'done' ? 'line-through text-fg-faint' : 'text-fg'}`}>
+                      <button onClick={() => openTaskEditor(task)} className={`block py-2.5 -my-2.5 pointer-fine:py-0 pointer-fine:my-0 text-[15px] pointer-fine:text-sm text-left truncate max-w-full hover:underline underline-offset-2 ${task.status === 'done' ? 'line-through text-fg-faint' : 'text-fg'}`}>
                         {task.title}
                       </button>
                       {(task.subtasks.length > 0 || task.tags.length > 0) && (
@@ -132,7 +140,7 @@ export const TasksSection: React.FC = () => {
                     aria-label={`Status of ${task.title}`}
                     value={task.status}
                     onChange={(e) => updateTask(task, { status: e.target.value as Task['status'] })}
-                    className="h-7 pl-1.5 pr-6 bg-transparent border border-transparent hover:border-line rounded text-[13px] text-fg-muted focus:outline-none focus:border-accent justify-self-end md:justify-self-stretch"
+                    className="h-10 pointer-fine:h-7 pl-1.5 pr-6 bg-transparent border border-transparent hover:border-line rounded text-base pointer-fine:text-[13px] text-fg-muted focus:outline-none focus:border-accent justify-self-end md:justify-self-stretch"
                   >
                     {TASK_STATUS_OPTIONS.map((s) => (
                       <option key={s.value} value={s.value}>
@@ -148,9 +156,11 @@ export const TasksSection: React.FC = () => {
                   <span className="hidden md:block">
                     <PriorityBadge priority={task.priority} />
                   </span>
-                  <IconButton label={`Delete ${task.title}`} danger onClick={() => deleteTask(task)} className="hidden md:inline-flex opacity-0 group-hover:opacity-100 focus:opacity-100">
-                    <Trash2 size={14} />
-                  </IconButton>
+                  <span className="hidden md:block">
+                    <IconButton label={`Delete ${task.title}`} danger onClick={() => deleteTask(task)} className="opacity-0 group-hover:opacity-100 focus:opacity-100">
+                      <Trash2 size={14} />
+                    </IconButton>
+                  </span>
                 </li>
               );
             })}

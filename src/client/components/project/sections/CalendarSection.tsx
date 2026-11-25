@@ -62,7 +62,7 @@ export const CalendarSection: React.FC = () => {
   const shift = (delta: number) => setCursor(new Date(year, month + delta, 1));
 
   const renderItem = (item: CalendarItem, i: number, compact: boolean) => {
-    const cls = `block w-full text-left truncate rounded px-1.5 ${compact ? 'h-5 leading-5 text-xs' : 'py-1 text-[13px]'} ${KIND_STYLE[item.kind]} ${item.done ? 'line-through opacity-60' : ''}`;
+    const cls = `block w-full text-left truncate rounded px-1.5 ${compact ? 'h-7 leading-7 pointer-fine:h-5 pointer-fine:leading-5 text-xs' : 'py-2.5 text-sm'} ${KIND_STYLE[item.kind]} ${item.done ? 'line-through opacity-60' : ''}`;
     const text = `${KIND_LABEL[item.kind]}: ${item.title}`;
     return item.kind === 'task' ? (
       <button key={`t-${item.task.id}`} onClick={() => openTaskEditor(item.task)} className={`${cls} hover:brightness-95`} title={text}>
@@ -79,16 +79,16 @@ export const CalendarSection: React.FC = () => {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-1">
-          <h2 className="text-base font-semibold text-fg w-40" aria-live="polite">
+          <h2 className="text-base font-semibold text-fg w-36 sm:w-40" aria-live="polite">
             {cursor.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
           </h2>
-          <button onClick={() => shift(-1)} className="w-7 h-7 flex items-center justify-center rounded-md text-fg-muted hover:text-fg hover:bg-hover" aria-label="Previous month">
+          <button onClick={() => shift(-1)} className="w-10 h-10 pointer-fine:w-7 pointer-fine:h-7 flex items-center justify-center rounded-md text-fg-muted hover:text-fg hover:bg-hover" aria-label="Previous month">
             <ChevronLeft size={16} />
           </button>
           <Button variant="secondary" size="sm" onClick={() => setCursor(new Date(new Date().getFullYear(), new Date().getMonth(), 1))}>
             Today
           </Button>
-          <button onClick={() => shift(1)} className="w-7 h-7 flex items-center justify-center rounded-md text-fg-muted hover:text-fg hover:bg-hover" aria-label="Next month">
+          <button onClick={() => shift(1)} className="w-10 h-10 pointer-fine:w-7 pointer-fine:h-7 flex items-center justify-center rounded-md text-fg-muted hover:text-fg hover:bg-hover" aria-label="Next month">
             <ChevronRight size={16} />
           </button>
         </div>
@@ -118,7 +118,7 @@ export const CalendarSection: React.FC = () => {
             const weekend = d.getDay() === 0 || d.getDay() === 6;
             const items = itemsByDate.get(key) ?? [];
             return (
-              <div key={key} className={`group min-h-[112px] p-1 border-r border-b border-line [&:nth-child(7n)]:border-r-0 ${!inMonth ? 'bg-subtle' : weekend ? 'bg-subtle/50' : ''}`}>
+              <div key={key} className={`group min-h-[128px] pointer-fine:min-h-[112px] p-1 border-r border-b border-line [&:nth-child(7n)]:border-r-0 ${!inMonth ? 'bg-subtle' : weekend ? 'bg-subtle/50' : ''}`}>
                 <div className="flex items-center justify-between h-6 mb-0.5">
                   <span
                     className={`text-xs min-w-6 h-6 px-1 flex items-center justify-center rounded-full tabular-nums ${
@@ -130,7 +130,7 @@ export const CalendarSection: React.FC = () => {
                   {inMonth && (
                     <button
                       onClick={() => openTaskEditor(undefined, { dueDate: key })}
-                      className="opacity-0 group-hover:opacity-100 focus:opacity-100 w-5 h-5 flex items-center justify-center rounded text-fg-faint hover:text-fg hover:bg-hover"
+                      className="opacity-0 group-hover:opacity-100 focus:opacity-100 w-8 h-8 pointer-fine:w-5 pointer-fine:h-5 flex items-center justify-center rounded text-fg-faint hover:text-fg hover:bg-hover"
                       aria-label={`Add task due ${d.toLocaleDateString()}`}
                     >
                       <Plus size={12} />

@@ -55,7 +55,7 @@ export const ToastBanner: React.FC = () => {
 
   return (
     // Always rendered so screen readers announce changes
-    <div aria-live="polite" role="status" className="fixed bottom-4 inset-x-4 sm:inset-x-auto sm:right-5 sm:bottom-5 z-[60] flex justify-center sm:justify-end pointer-events-none">
+    <div aria-live="polite" role="status" className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] lg:bottom-5 inset-x-4 sm:inset-x-auto sm:right-5 z-[60] flex justify-center sm:justify-end pointer-events-none">
       {toast && (
         <div
           key={toast.id}

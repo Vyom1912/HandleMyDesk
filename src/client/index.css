@@ -171,6 +171,25 @@ body {
   }
 }
 
+/* Touchscreens have no hover: show the actions that a mouse reveals on hover */
+@media (hover: none) {
+  [class*="group-hover:opacity-100"] {
+    opacity: 1 !important;
+  }
+}
+
+/* No grey flash when tapping; no accidental double-tap zoom on controls */
+button,
+a,
+[role="button"],
+input,
+select,
+textarea,
+label {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
 /* Native date pickers follow the theme */
 input[type="date"]::-webkit-calendar-picker-indicator {
   opacity: 0.6;

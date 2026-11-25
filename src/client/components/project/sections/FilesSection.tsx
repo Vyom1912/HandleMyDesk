@@ -143,7 +143,7 @@ export const FilesSection: React.FC = () => {
                       <button
                         onClick={() => hasContent && download(file)}
                         disabled={!hasContent}
-                        className="block text-sm text-fg truncate max-w-full text-left enabled:hover:underline underline-offset-2 disabled:cursor-default"
+                        className="block py-2.5 -my-2.5 pointer-fine:py-0 pointer-fine:my-0 text-[15px] pointer-fine:text-sm text-fg truncate max-w-full text-left enabled:hover:underline underline-offset-2 disabled:cursor-default"
                         title={hasContent ? `Download ${file.name}` : 'Sample entry: no stored file'}
                       >
                         {file.name}

@@ -182,7 +182,7 @@ export const ProjectWorkspace: React.FC<{ projectId: string }> = ({ projectId })
   }, [projectId]);
 
   const projectsCrumb = (
-    <button onClick={() => navigate({ view: 'projects' })} className="hover:text-fg hover:underline underline-offset-2">
+    <button onClick={() => navigate({ view: 'projects' })} className="py-2.5 -my-2.5 pointer-fine:py-0 pointer-fine:my-0 hover:text-fg hover:underline underline-offset-2">
       Projects
     </button>
   );
@@ -338,19 +338,19 @@ export const ProjectWorkspace: React.FC<{ projectId: string }> = ({ projectId })
             <>
               <button
                 onClick={() => openProject(projectId, 'report')}
-                className="h-7 px-2 flex items-center gap-1.5 rounded-md text-[13px] text-fg-muted hover:bg-hover hover:text-fg"
+                className="h-10 pointer-fine:h-7 px-2.5 pointer-fine:px-2 flex items-center gap-1.5 rounded-md text-[13px] text-fg-muted hover:bg-hover hover:text-fg"
                 title="A printable summary to share with the client"
               >
                 <FileText size={14} />
                 <span className="hidden sm:inline">Client summary</span>
               </button>
-              <button onClick={copyLink} className="h-7 px-2 flex items-center gap-1.5 rounded-md text-[13px] text-fg-muted hover:bg-hover hover:text-fg" title="Copy a link to this page">
+              <button onClick={copyLink} className="h-10 pointer-fine:h-7 px-2.5 pointer-fine:px-2 flex items-center gap-1.5 rounded-md text-[13px] text-fg-muted hover:bg-hover hover:text-fg" title="Copy a link to this page">
                 <LinkIcon size={14} />
                 <span className="hidden sm:inline">Copy link</span>
               </button>
               <button
                 onClick={() => toggleFavorite(projectId)}
-                className={`w-7 h-7 flex items-center justify-center rounded-md hover:bg-hover ${isFavorite ? 'text-tone-amber-fg' : 'text-fg-muted hover:text-fg'}`}
+                className={`w-10 h-10 pointer-fine:w-7 pointer-fine:h-7 flex items-center justify-center rounded-md hover:bg-hover ${isFavorite ? 'text-tone-amber-fg' : 'text-fg-muted hover:text-fg'}`}
                 aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
                 aria-pressed={isFavorite}
                 title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
@@ -363,14 +363,14 @@ export const ProjectWorkspace: React.FC<{ projectId: string }> = ({ projectId })
 
         <div className="flex-1 overflow-y-auto">
           {/* Project header */}
-          <div className="mx-auto px-4 sm:px-8 lg:px-12 pt-6 sm:pt-8 max-w-6xl">
+          <div className="mx-auto px-4 sm:px-8 lg:px-12 pt-4 sm:pt-8 max-w-6xl">
             <div className="flex flex-wrap items-center gap-2 text-xs text-fg-faint mb-2">
               <span className="font-mono">{project.code}</span>
               <span aria-hidden="true">·</span>
               <span>{project.clientName}</span>
             </div>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-              <h1 className="text-[28px] leading-tight font-semibold tracking-tight text-fg">{project.name}</h1>
+              <h1 className="text-2xl sm:text-[28px] leading-tight font-semibold tracking-tight text-fg">{project.name}</h1>
               <div className="flex items-center gap-1.5">
                 <StatusBadge status={project.status} />
                 <PriorityBadge priority={project.priority} />
@@ -387,7 +387,7 @@ export const ProjectWorkspace: React.FC<{ projectId: string }> = ({ projectId })
                       key={s.id}
                       onClick={() => openProject(projectId, s.id)}
                       aria-current={active ? 'page' : undefined}
-                      className={`relative shrink-0 h-9 px-2.5 mx-0.5 text-sm whitespace-nowrap transition-colors ${
+                      className={`relative shrink-0 h-11 pointer-fine:h-9 px-2.5 mx-0.5 text-[15px] pointer-fine:text-sm whitespace-nowrap transition-colors ${
                         active ? 'text-fg font-medium' : 'text-fg-muted hover:text-fg'
                       }`}
                     >

@@ -25,13 +25,16 @@ export const KanbanSection: React.FC = () => {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-[13px] text-fg-muted">Drag cards between columns, or use the arrows on each card.</p>
+        <p className="text-[13px] text-fg-muted">
+          <span className="pointer-coarse:hidden">Drag cards between columns, or use the arrows on each card.</span>
+          <span className="hidden pointer-coarse:inline">Swipe across the columns; move a card with its arrows.</span>
+        </p>
         <Button onClick={() => openTaskEditor()}>
           <Plus size={15} /> New task
         </Button>
       </div>
 
-      <div className="grid grid-flow-col auto-cols-[minmax(196px,1fr)] gap-3 overflow-x-auto pb-3 snap-x">
+      <div className="grid grid-flow-col auto-cols-[82%] sm:auto-cols-[minmax(240px,1fr)] lg:auto-cols-[minmax(196px,1fr)] gap-3 overflow-x-auto pb-3 snap-x">
         {TASK_STATUS_OPTIONS.map((column, colIndex) => {
           const columnTasks = tasks.filter((t) => t.status === column.value);
           const isOver = overColumn === column.value;
@@ -75,7 +78,7 @@ export const KanbanSection: React.FC = () => {
                         dragTaskId === t.id ? 'opacity-40' : ''
                       }`}
                     >
-                      <button onClick={() => openTaskEditor(t)} className="block w-full text-left text-sm text-fg leading-snug hover:underline underline-offset-2">
+                      <button onClick={() => openTaskEditor(t)} className="block w-full py-2.5 -my-2.5 pointer-fine:py-0 pointer-fine:my-0 text-left text-[15px] pointer-fine:text-sm text-fg leading-snug hover:underline underline-offset-2">
                         {t.title}
                       </button>
                       <div className="flex flex-wrap items-center gap-1.5 mt-2">
@@ -97,7 +100,7 @@ export const KanbanSection: React.FC = () => {
                           <button
                             disabled={colIndex === 0}
                             onClick={() => move(t, TASK_STATUS_OPTIONS[colIndex - 1].value)}
-                            className="w-6 h-6 flex items-center justify-center rounded text-fg-faint hover:text-fg hover:bg-hover disabled:invisible"
+                            className="w-10 h-10 pointer-fine:w-6 pointer-fine:h-6 flex items-center justify-center rounded text-fg-faint hover:text-fg hover:bg-hover disabled:invisible"
                             aria-label={colIndex > 0 ? `Move “${t.title}” to ${TASK_STATUS_OPTIONS[colIndex - 1].label}` : undefined}
                           >
                             <ChevronLeft size={14} />
@@ -105,7 +108,7 @@ export const KanbanSection: React.FC = () => {
                           <button
                             disabled={colIndex === TASK_STATUS_OPTIONS.length - 1}
                             onClick={() => move(t, TASK_STATUS_OPTIONS[colIndex + 1].value)}
-                            className="w-6 h-6 flex items-center justify-center rounded text-fg-faint hover:text-fg hover:bg-hover disabled:invisible"
+                            className="w-10 h-10 pointer-fine:w-6 pointer-fine:h-6 flex items-center justify-center rounded text-fg-faint hover:text-fg hover:bg-hover disabled:invisible"
                             aria-label={colIndex < TASK_STATUS_OPTIONS.length - 1 ? `Move “${t.title}” to ${TASK_STATUS_OPTIONS[colIndex + 1].label}` : undefined}
                           >
                             <ChevronRight size={14} />

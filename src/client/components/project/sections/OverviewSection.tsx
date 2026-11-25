@@ -136,7 +136,7 @@ const AboutBlock: React.FC = () => {
           About this project
         </h2>
         {canManage && !editing && (
-          <button onClick={start} className="h-7 px-2 flex items-center gap-1.5 rounded-md text-[13px] text-fg-muted hover:bg-hover hover:text-fg">
+          <button onClick={start} className="h-10 pointer-fine:h-7 px-2.5 pointer-fine:px-2 flex items-center gap-1.5 rounded-md text-[13px] text-fg-muted hover:bg-hover hover:text-fg">
             <Pencil size={13} /> Edit
           </button>
         )}
@@ -203,7 +203,7 @@ const KeyLinks: React.FC = () => {
         <h2 id="links-heading" className="text-[13px] font-medium text-fg-muted">
           Links
         </h2>
-        <button onClick={() => add('other')} className="w-7 h-7 flex items-center justify-center rounded-md text-fg-faint hover:bg-hover hover:text-fg" aria-label="Add link" title="Add link">
+        <button onClick={() => add('other')} className="w-10 h-10 pointer-fine:w-7 pointer-fine:h-7 flex items-center justify-center rounded-md text-fg-faint hover:bg-hover hover:text-fg" aria-label="Add link" title="Add link">
           <Plus size={14} />
         </button>
       </div>
@@ -213,7 +213,7 @@ const KeyLinks: React.FC = () => {
           if (items.length === 0) {
             return (
               <li key={c.value}>
-                <button onClick={() => add(c.value)} className="w-full flex items-center gap-2.5 h-8 px-2 rounded-md text-[13px] text-fg-faint hover:bg-hover">
+                <button onClick={() => add(c.value)} className="w-full flex items-center gap-2.5 h-10 pointer-fine:h-8 px-2 rounded-md text-[13px] text-fg-faint hover:bg-hover">
                   <c.icon size={14} className="shrink-0" />
                   <span>Add {c.label.toLowerCase()}</span>
                 </button>
@@ -222,7 +222,7 @@ const KeyLinks: React.FC = () => {
           }
           return items.map((l) => (
             <li key={l.id}>
-              <a href={l.url} target="_blank" rel="noopener noreferrer" className="group flex items-center gap-2.5 h-8 px-2 rounded-md hover:bg-hover" title={l.url}>
+              <a href={l.url} target="_blank" rel="noopener noreferrer" className="group flex items-center gap-2.5 h-10 pointer-fine:h-8 px-2 rounded-md hover:bg-hover" title={l.url}>
                 <c.icon size={14} className="shrink-0 text-fg-muted" />
                 <span className="text-[13px] text-fg-muted w-20 shrink-0">{c.label}</span>
                 <span className="text-[13px] text-fg truncate">{hostOf(l.url)}</span>
@@ -235,7 +235,7 @@ const KeyLinks: React.FC = () => {
           const c = LINK_CATEGORIES.find((x) => x.value === l.category)!;
           return (
             <li key={l.id}>
-              <a href={l.url} target="_blank" rel="noopener noreferrer" className="group flex items-center gap-2.5 h-8 px-2 rounded-md hover:bg-hover" title={l.url}>
+              <a href={l.url} target="_blank" rel="noopener noreferrer" className="group flex items-center gap-2.5 h-10 pointer-fine:h-8 px-2 rounded-md hover:bg-hover" title={l.url}>
                 <c.icon size={14} className="shrink-0 text-fg-muted" />
                 <span className="text-[13px] text-fg truncate">{l.title}</span>
                 <ExternalLink size={12} className="ml-auto shrink-0 text-fg-faint opacity-0 group-hover:opacity-100" aria-hidden="true" />
@@ -274,7 +274,7 @@ export const OverviewSection: React.FC = () => {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] gap-x-12 gap-y-8">
       {/* Main column */}
-      <div className="space-y-10 min-w-0 order-2 lg:order-1">
+      <div className="space-y-10 min-w-0">
         <StageTracker />
         <AboutBlock />
 
@@ -305,7 +305,7 @@ export const OverviewSection: React.FC = () => {
             <h2 id="focus-heading" className="text-[13px] font-medium text-fg-muted">
               Priority work
             </h2>
-            <button onClick={() => goToSection('tasks')} className="text-[13px] text-fg-muted hover:text-fg">
+            <button onClick={() => goToSection('tasks')} className="py-2.5 -my-2.5 pointer-fine:py-0 pointer-fine:my-0 text-[13px] text-fg-muted hover:text-fg">
               All tasks →
             </button>
           </div>
@@ -316,7 +316,7 @@ export const OverviewSection: React.FC = () => {
               {focus.map((t) => (
                 <li key={t.id} className="flex items-center gap-3 px-3 py-2 hover:bg-subtle">
                   <TaskCheckbox task={t} onToggle={() => updateTask(t, { status: t.status === 'done' ? 'todo' : 'done' })} />
-                  <button onClick={() => openTaskEditor(t)} className="flex-1 min-w-0 text-left">
+                  <button onClick={() => openTaskEditor(t)} className="flex-1 min-w-0 text-left py-2.5 -my-2.5 pointer-fine:py-0 pointer-fine:my-0">
                     <div className="text-sm text-fg truncate">{t.title}</div>
                   </button>
                   <span className={`hidden sm:inline text-xs shrink-0 ${isOverdue(t.dueDate, false) ? 'text-tone-red-fg' : 'text-fg-faint'}`}>{formatDate(t.dueDate)}</span>
@@ -333,7 +333,7 @@ export const OverviewSection: React.FC = () => {
             <h2 id="milestones-heading" className="text-[13px] font-medium text-fg-muted">
               Upcoming milestones
             </h2>
-            <button onClick={() => goToSection('timeline')} className="text-[13px] text-fg-muted hover:text-fg">
+            <button onClick={() => goToSection('timeline')} className="py-2.5 -my-2.5 pointer-fine:py-0 pointer-fine:my-0 text-[13px] text-fg-muted hover:text-fg">
               All milestones →
             </button>
           </div>
@@ -363,7 +363,7 @@ export const OverviewSection: React.FC = () => {
             <h2 id="recent-heading" className="text-[13px] font-medium text-fg-muted">
               Recent activity
             </h2>
-            <button onClick={() => goToSection('activity')} className="text-[13px] text-fg-muted hover:text-fg">
+            <button onClick={() => goToSection('activity')} className="py-2.5 -my-2.5 pointer-fine:py-0 pointer-fine:my-0 text-[13px] text-fg-muted hover:text-fg">
               View all →
             </button>
           </div>
@@ -383,7 +383,7 @@ export const OverviewSection: React.FC = () => {
       </div>
 
       {/* Properties column */}
-      <aside className="space-y-8 order-1 lg:order-2 min-w-0">
+      <aside className="space-y-8 min-w-0">
         <section aria-label="Properties">
           <dl>
             <Property label="Status">
@@ -418,7 +418,7 @@ export const OverviewSection: React.FC = () => {
               </div>
             </Property>
             <Property label="Team">
-              <button onClick={() => goToSection('team')} className="flex items-center -space-x-1.5 hover:opacity-80" aria-label={`${teamMembers.length} team members, view team`}>
+              <button onClick={() => goToSection('team')} className="flex items-center -space-x-1.5 hover:opacity-80 py-2.5 -my-2.5 pointer-fine:py-0 pointer-fine:my-0" aria-label={`${teamMembers.length} team members, view team`}>
                 {teamMembers.slice(0, 6).map((m) => (
                   <Avatar key={m.id} src={m.avatar} name={m.name} size={22} className="ring-2 ring-canvas" />
                 ))}
