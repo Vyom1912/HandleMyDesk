@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Plus, Star } from 'lucide-react';
+import { Plus, Star, Download } from 'lucide-react';
+import { downloadCsv } from '../../services/exports';
 import { useApp } from '../../context/AppContext';
 import { Avatar, StatusBadge, formatDate, isOverdue } from '../ui/Badges';
 import { Button, SearchInput, Segmented, toolbarSelectClass } from '../ui/Field';
@@ -9,7 +10,7 @@ type Scope = 'all' | 'mine' | 'lead';
 type SortKey = 'name' | 'due' | 'progress' | 'updated';
 
 export const ProjectDirectoryView: React.FC = () => {
-  const { currentUser, projects, favoriteIds, toggleFavorite, openProject, setIsCreateProjectOpen } = useApp();
+  const { currentUser, projects, favoriteIds, toggleFavorite, openProject, setIsCreateProjectOpen, showToast } = useApp();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('open');
   const [scope, setScope] = useState<Scope>('all');
@@ -39,11 +40,16 @@ export const ProjectDirectoryView: React.FC = () => {
       title="All projects"
       description={`${projects.length} projects you can access`}
       actions={
-        canCreate && (
-          <Button onClick={() => setIsCreateProjectOpen(true)}>
-            <Plus size={15} /> New project
+        <>
+          <Button variant="secondary" onClick={() => downloadCsv('/api/projects/export.csv', 'projects').catch((err) => showToast(err.message, 'error'))} title="All projects you can see, as a spreadsheet">
+            <Download size={15} /> Export CSV
           </Button>
-        )
+          {canCreate && (
+            <Button onClick={() => setIsCreateProjectOpen(true)}>
+              <Plus size={15} /> New project
+            </Button>
+          )}
+        </>
       }
     >
       <div className="flex flex-wrap items-center gap-2 mb-4">

@@ -203,3 +203,42 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     scroll-behavior: auto !important;
   }
 }
+
+/* Printing: only the project summary, always in light colours */
+.print-only {
+  display: none;
+}
+@media print {
+  :root,
+  :root[data-theme="dark"] {
+    --canvas: #ffffff;
+    --surface: #ffffff;
+    --subtle: #f6f6f5;
+    --hover: #efefee;
+    --line: #dcdcda;
+    --line-strong: #c8c8c5;
+    --fg: #111111;
+    --fg-muted: #4a4a47;
+    --fg-faint: #6b6a66;
+    --accent: #2b63d9;
+    --accent-ink: #1f4fae;
+  }
+  html,
+  body {
+    height: auto;
+    background: #ffffff;
+  }
+  #root {
+    display: none !important;
+  }
+  .print-only {
+    display: block;
+    padding: 0;
+  }
+  .break-inside-avoid {
+    break-inside: avoid;
+  }
+  @page {
+    margin: 18mm 16mm;
+  }
+}

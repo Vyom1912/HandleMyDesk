@@ -18,7 +18,8 @@ const TYPES: Array<{ value: Filter; label: string }> = [
 const dayLabel = (iso: string) => new Date(iso).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
 
 export const ActivitySection: React.FC = () => {
-  const { activities } = useProject();
+  const { activities, activityHasMore, loadMoreActivity } = useProject();
+  const [loading, setLoading] = useState(false);
   const [type, setType] = useState<Filter>('all');
   const visible = type === 'all' ? activities : activities.filter((a) => a.type === type);
   let lastDay = '';
@@ -53,6 +54,18 @@ export const ActivitySection: React.FC = () => {
             );
           })}
         </ol>
+      )}
+      {activityHasMore && type === 'all' && (
+        <button
+          onClick={() => {
+            setLoading(true);
+            loadMoreActivity().finally(() => setLoading(false));
+          }}
+          disabled={loading}
+          className="h-8 px-3 rounded-md border border-line text-[13px] text-fg-muted hover:text-fg hover:bg-hover disabled:opacity-50"
+        >
+          {loading ? 'Loading…' : 'Load older activity'}
+        </button>
       )}
     </div>
   );

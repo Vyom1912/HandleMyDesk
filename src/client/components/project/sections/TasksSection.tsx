@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { Plus, Check, Trash2, ListChecks } from 'lucide-react';
+import { Plus, Check, Trash2, ListChecks, Download } from 'lucide-react';
+import { useApp } from '../../../context/AppContext';
+import { downloadCsv } from '../../../services/exports';
 import { Task } from '../../../../types';
 import { useProject } from '../ProjectContext';
 import { Avatar, PriorityBadge, formatDate, isOverdue } from '../../ui/Badges';
@@ -30,7 +32,8 @@ export const TASK_STATUS_OPTIONS: Array<{ value: Task['status']; label: string }
 const STATUS_FILTERS = [{ value: 'open', label: 'Open' }, { value: 'all', label: 'All statuses' }, ...TASK_STATUS_OPTIONS];
 
 export const TasksSection: React.FC = () => {
-  const { tasks, teamMembers, updateTask, deleteTask, openTaskEditor } = useProject();
+  const { projectId, project, tasks, teamMembers, updateTask, deleteTask, openTaskEditor } = useProject();
+  const { showToast } = useApp();
   const [statusFilter, setStatusFilter] = useState('open');
   const [assigneeFilter, setAssigneeFilter] = useState('all');
   const [search, setSearch] = useState('');
@@ -64,7 +67,15 @@ export const TasksSection: React.FC = () => {
             </option>
           ))}
         </select>
-        <Button className="ml-auto" onClick={() => openTaskEditor()}>
+        <Button
+          variant="secondary"
+          className="ml-auto"
+          onClick={() => downloadCsv(`/api/projects/${projectId}/export/tasks.csv`, `${project.code}-tasks`).catch((err) => showToast(err.message, 'error'))}
+          title="All of this project's tasks, as a spreadsheet"
+        >
+          <Download size={15} /> Export
+        </Button>
+        <Button onClick={() => openTaskEditor()}>
           <Plus size={15} /> New task
         </Button>
       </div>

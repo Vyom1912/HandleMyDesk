@@ -273,7 +273,8 @@ export type ProjectSection =
   | 'team'
   | 'deliverables'
   | 'activity'
-  | 'settings';
+  | 'settings'
+  | 'report';
 
 export interface DashboardStats {
   activeProjectsCount: number;
@@ -302,4 +303,40 @@ export interface BackupInfo {
   name: string;
   sizeBytes: number;
   createdAt: string;
+}
+
+// A reusable starting point for new projects: tasks and milestones are placed relative to the start date
+export interface TemplateTask {
+  title: string;
+  description: string;
+  priority: TaskPriority;
+  offsetDays: number;
+  tags: string[];
+  subtasks: string[];
+}
+
+export interface TemplateMilestone {
+  title: string;
+  description: string;
+  offsetDays: number;
+}
+
+export interface ProjectTemplate {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  tasks: TemplateTask[];
+  milestones: TemplateMilestone[];
+  // Built-in templates ship with the app and can't be deleted
+  builtIn?: boolean;
+  createdById?: string;
+  createdByName?: string;
+  createdAt: string;
+}
+
+// Paged lists return the items plus whether older ones exist
+export interface Page<T> {
+  items: T[];
+  hasMore: boolean;
 }

@@ -23,6 +23,10 @@ import {
   AuthenticatedRequest,
 } from './auth';
 import { addStream, removeStream, emitToUsers, closeStreamsFor } from './events';
+import { requestLogger, logServerError, LoggedRequest } from './logging';
+import { toCsv, csvFileName } from './csv';
+import { ssoRouter } from './sso';
+import { BUILT_IN_TEMPLATES, instantiateTemplate, templateFromProject } from './templates';
 import {
   Project,
   Task,
@@ -45,6 +49,8 @@ import {
   NotificationKind,
   NOTIFICATION_KINDS,
   PROJECT_STAGES,
+  ProjectTemplate,
+  Page,
 } from '../types';
 
 export const app = express();
@@ -87,13 +93,8 @@ if (process.env.CORS_ORIGIN) {
 }
 app.use(express.json({ limit: '1mb' }));
 
-// Log incoming requests in dev
-app.use((req, res, next) => {
-  if (process.env.NODE_ENV !== 'test') {
-    console.log(`[${req.method}] ${req.url}`);
-  }
-  next();
-});
+// One log line per request, with a request id that also goes back in the X-Request-Id header
+app.use(requestLogger);
 
 // ==========================================
 // HELPERS & VALIDATION
@@ -240,6 +241,16 @@ function notify(
   return created;
 }
 
+// ?limit=50&before=<timestamp> returns one page of a newest-first list
+function pageOf<T extends { timestamp: string }>(newestFirst: T[], req: Request): Page<T> {
+  const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 50));
+  const before = typeof req.query.before === 'string' ? req.query.before : null;
+  const remaining = before ? newestFirst.filter((i) => i.timestamp < before) : newestFirst;
+  return { items: remaining.slice(0, limit), hasMore: remaining.length > limit };
+}
+
+const byNewest = <T extends { timestamp: string }>(a: T, b: T) => b.timestamp.localeCompare(a.timestamp);
+
 function recalcCompletion(projectId: string) {
   const database = db.getData();
   const project = database.projects.find((p) => p.id === projectId);
@@ -319,7 +330,7 @@ app.use('/api/projects/:id', (req: AuthenticatedRequest, res, next) => {
 
 // Lets people (and the dev tooling) confirm which server process is answering
 app.get('/api/health', (req, res) => {
-  res.json({ ok: true, pid: process.pid, uptimeSeconds: Math.round(process.uptime()) });
+  res.json({ ok: true, pid: process.pid, uptimeSeconds: Math.round(process.uptime()), schemaVersion: db.schemaVersion() });
 });
 
 // ==========================================
@@ -377,6 +388,9 @@ app.post('/api/auth/logout-all', authMiddleware, (req: AuthenticatedRequest, res
 app.get('/api/employees', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
   res.json(db.getData().users);
 });
+
+// Company single sign-on (OpenID Connect); inactive unless configured in .env
+app.use(ssoRouter);
 
 // ==========================================
 // PEOPLE ADMINISTRATION (admins only)
@@ -805,6 +819,8 @@ app.post(
     if (!client) throw new HttpError(400, 'Selected client does not exist');
 
     const code = text(body.code, 'Project code', 20)?.toUpperCase() || `PRJ-${Math.floor(100 + Math.random() * 900)}`;
+    const template = body.templateId ? findTemplate(String(body.templateId)) : null;
+    if (body.templateId && !template) throw new HttpError(400, 'That template no longer exists');
     if (database.projects.some((p) => p.code === code)) throw new HttpError(400, `Project code ${code} is already in use`);
 
     // Team: only real employees, always including the creator (who becomes lead)
@@ -833,14 +849,19 @@ app.post(
       targetDate: dateStr(body.targetDate, 'Target date') ?? daysFromNow(90),
       completionPercentage: 0,
       stage: 'planning',
-      category: text(body.category, 'Category', 100) || 'General Project',
+      category: text(body.category, 'Category', 100) || template?.category || 'General Project',
       teamMemberIds: [...team],
       createdAt: now(),
       updatedAt: now(),
     };
 
     database.projects.unshift(newProject);
-    logActivity(newProject.id, user, `created new project "${newProject.name}"`, 'general');
+    logActivity(newProject.id, user, `created new project "${newProject.name}"${template ? ` from the "${template.name}" template` : ''}`, 'general');
+    if (template) {
+      const { tasks, milestones } = instantiateTemplate(template, newProject, user, newId);
+      database.tasks.unshift(...tasks);
+      database.milestones.push(...milestones);
+    }
     notify(newProject.teamMemberIds, user, {
       kind: 'team',
       title: 'Added to New Project',
@@ -853,6 +874,154 @@ app.post(
     res.status(201).json(newProject);
   })
 );
+
+// ==========================================
+// PROJECT TEMPLATES
+// ==========================================
+
+function findTemplate(id: string): ProjectTemplate | undefined {
+  return BUILT_IN_TEMPLATES.find((t) => t.id === id) ?? db.getData().templates.find((t) => t.id === id);
+}
+
+function findEditableTemplate(req: AuthenticatedRequest): ProjectTemplate {
+  const template = db.getData().templates.find((t) => t.id === param(req, 'templateId'));
+  if (!template) {
+    if (BUILT_IN_TEMPLATES.some((t) => t.id === param(req, 'templateId'))) throw new HttpError(400, 'Built-in templates cannot be changed');
+    throw new HttpError(404, 'Template not found');
+  }
+  if (template.createdById !== req.user!.id && req.user!.role !== 'admin') {
+    throw new HttpError(403, 'Only the person who made this template or an administrator can change it');
+  }
+  return template;
+}
+
+app.get('/api/templates', authMiddleware, (req, res) => {
+  res.json([...BUILT_IN_TEMPLATES, ...db.getData().templates]);
+});
+
+app.post(
+  '/api/projects/:id/save-as-template',
+  authMiddleware,
+  requireProjectAccess,
+  requireProjectManager,
+  route((req, res) => {
+    const user = req.user!;
+    const database = db.getData();
+    const project = getProject(req);
+    const name = text(req.body?.name, 'Template name', 100, true)!;
+    const shape = templateFromProject(
+      project,
+      database.tasks.filter((t) => t.projectId === project.id),
+      database.milestones.filter((m) => m.projectId === project.id)
+    );
+    const template: ProjectTemplate = {
+      id: newId('tpl'),
+      name,
+      description: text(req.body?.description, 'Description', 500) ?? '',
+      ...shape,
+      createdById: user.id,
+      createdByName: user.name,
+      createdAt: now(),
+    };
+    database.templates.push(template);
+    db.save();
+    res.status(201).json(template);
+  })
+);
+
+app.put(
+  '/api/templates/:templateId',
+  authMiddleware,
+  route((req, res) => {
+    const template = findEditableTemplate(req);
+    const name = text(req.body?.name, 'Template name', 100);
+    if (name !== undefined && !name) throw new HttpError(400, 'Template name is required');
+    if (name) template.name = name;
+    const description = text(req.body?.description, 'Description', 500);
+    if (description !== undefined) template.description = description;
+    db.save();
+    res.json(template);
+  })
+);
+
+app.delete(
+  '/api/templates/:templateId',
+  authMiddleware,
+  route((req, res) => {
+    const template = findEditableTemplate(req);
+    const database = db.getData();
+    database.templates = database.templates.filter((t) => t.id !== template.id);
+    db.save();
+    res.json({ message: 'Template deleted' });
+  })
+);
+
+// ==========================================
+// EXPORTS (CSV)
+// ==========================================
+
+function sendCsv(res: Response, name: string, headers: string[], rows: Array<Array<string | number | undefined>>) {
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="${csvFileName(name)}"`);
+  res.send(toCsv(headers, rows));
+}
+
+const TASK_CSV_HEADERS = ['Project', 'Code', 'Task', 'Status', 'Priority', 'Assignee', 'Due date', 'Tags', 'Checklist done', 'Checklist total', 'Created', 'Updated'];
+const taskRow = (t: Task) => [
+  t.projectName,
+  t.projectCode,
+  t.title,
+  t.status.replace('_', ' '),
+  t.priority,
+  t.assigneeName,
+  t.dueDate,
+  t.tags.join(', '),
+  t.subtasks.filter((s) => s.completed).length,
+  t.subtasks.length,
+  t.createdAt.slice(0, 10),
+  t.updatedAt.slice(0, 10),
+];
+
+// Every project the person can see
+app.get('/api/projects/export.csv', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
+  const database = db.getData();
+  const projects = database.projects.filter((p) => canUserViewProject(req.user!, p));
+  sendCsv(
+    res,
+    'projects',
+    ['Code', 'Project', 'Client', 'Status', 'Stage', 'Priority', 'Lead', 'Category', 'Start', 'Target', 'Complete %', 'Open tasks', 'Budget', 'Spent', 'Team size'],
+    projects.map((p) => [
+      p.code,
+      p.name,
+      p.clientName,
+      p.status.replace('_', ' '),
+      (p.stage ?? '').replace('_', ' '),
+      p.priority,
+      p.leadName,
+      p.category,
+      p.startDate,
+      p.targetDate,
+      p.completionPercentage,
+      database.tasks.filter((t) => t.projectId === p.id && t.status !== 'done').length,
+      p.budget,
+      p.spent,
+      projectMemberIds(p).size,
+    ])
+  );
+});
+
+// Tasks across projects (?filter=assigned_to_me for just yours)
+app.get('/api/tasks/export.csv', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
+  const visible = visibleProjectIds(req.user!);
+  let tasks = db.getData().tasks.filter((t) => visible.has(t.projectId));
+  if (req.query.filter === 'assigned_to_me') tasks = tasks.filter((t) => t.assigneeId === req.user!.id);
+  sendCsv(res, req.query.filter === 'assigned_to_me' ? 'my-tasks' : 'tasks', TASK_CSV_HEADERS, tasks.map(taskRow));
+});
+
+app.get('/api/projects/:id/export/tasks.csv', authMiddleware, requireProjectAccess, (req, res) => {
+  const project = getProject(req);
+  sendCsv(res, `${project.code}-tasks`, TASK_CSV_HEADERS, db.getData().tasks.filter((t) => t.projectId === project.id).map(taskRow));
+});
 
 app.get('/api/projects/:id', authMiddleware, requireProjectAccess, (req: AuthenticatedRequest, res: Response) => {
   res.json(getProject(req));
@@ -1347,7 +1516,13 @@ app.delete(
 
 // 4. Chat Messages
 app.get('/api/projects/:id/chat', authMiddleware, requireProjectAccess, (req, res) => {
-  res.json(db.getData().chatMessages.filter((m) => m.projectId === param(req, 'id')));
+  const items = db.getData().chatMessages.filter((m) => m.projectId === param(req, 'id'));
+  if (!req.query.limit) {
+    res.json(items);
+    return;
+  }
+  const page = pageOf([...items].sort(byNewest), req);
+  res.json({ ...page, items: page.items.reverse() });
 });
 
 app.post(
@@ -1693,7 +1868,8 @@ app.delete(
 
 // 9. Activity History
 app.get('/api/projects/:id/activity', authMiddleware, requireProjectAccess, (req, res) => {
-  res.json(db.getData().activities.filter((a) => a.projectId === param(req, 'id')));
+  const items = db.getData().activities.filter((a) => a.projectId === param(req, 'id'));
+  res.json(req.query.limit ? pageOf([...items].sort(byNewest), req) : items);
 });
 
 // ==========================================
@@ -2180,8 +2356,12 @@ app.get('/api/notifications', authMiddleware, (req: AuthenticatedRequest, res: R
   const notifs = db
     .getData()
     .notifications.filter((n) => n.userId === req.user!.id)
-    .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
-  res.json(notifs);
+    .sort(byNewest);
+  if (!req.query.limit) {
+    res.json(notifs);
+    return;
+  }
+  res.json({ ...pageOf(notifs, req), unreadCount: notifs.filter((n) => !n.read).length });
 });
 
 app.post('/api/notifications/read-all', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
@@ -2240,8 +2420,9 @@ app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
     res.status(400).json({ error: 'Malformed JSON body' });
     return;
   }
-  console.error(err);
-  res.status(500).json({ error: 'Something went wrong on the server' });
+  logServerError(err, req as LoggedRequest);
+  const requestId = (req as LoggedRequest).requestId;
+  res.status(500).json({ error: `Something went wrong on the server. Reference: ${requestId}`, requestId });
 });
 
 // Start listening if not running in test mode

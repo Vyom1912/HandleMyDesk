@@ -77,7 +77,8 @@ const Preferences: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 };
 
 export const NotificationsDrawer: React.FC = () => {
-  const { isNotificationsOpen, setIsNotificationsOpen, notifications, notificationCount, markNotificationRead, markAllNotificationsRead, openProject } = useApp();
+  const { isNotificationsOpen, setIsNotificationsOpen, notifications, notificationCount, markNotificationRead, markAllNotificationsRead, openProject, hasMoreNotifications, loadMoreNotifications } = useApp();
+  const [loadingMore, setLoadingMore] = useState(false);
   const [filter, setFilter] = useState<'unread' | 'all'>('all');
   const [project, setProject] = useState('all');
   const [showPrefs, setShowPrefs] = useState(false);
@@ -187,6 +188,20 @@ export const NotificationsDrawer: React.FC = () => {
                     </div>
                   </li>
                 ))
+              )}
+              {hasMoreNotifications && (
+                <li className="p-3 flex justify-center">
+                  <button
+                    onClick={() => {
+                      setLoadingMore(true);
+                      loadMoreNotifications().finally(() => setLoadingMore(false));
+                    }}
+                    disabled={loadingMore}
+                    className="h-7 px-3 rounded-md border border-line text-[13px] text-fg-muted hover:text-fg hover:bg-hover disabled:opacity-50"
+                  >
+                    {loadingMore ? 'Loading…' : 'Load older notifications'}
+                  </button>
+                </li>
               )}
             </ul>
           </>

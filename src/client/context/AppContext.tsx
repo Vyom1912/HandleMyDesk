@@ -37,6 +37,7 @@ export const PROJECT_SECTIONS: ProjectSection[] = [
   'team',
   'activity',
   'settings',
+  'report',
 ];
 
 // URL hash <-> route. Hash routing keeps back/forward and shareable links working without server config.
@@ -72,6 +73,9 @@ function tabToRoute(tabId: string): Route {
 }
 
 // Per-user so people sharing a browser don't inherit each other's place
+type NotificationPage = { items: NotificationItem[]; hasMore: boolean; unreadCount: number };
+const NOTIFICATION_PAGE = 50;
+
 const SECTION_KEY = (userId: string, projectId: string) => `novadesk_section_${userId}_${projectId}`;
 const THEME_KEY = 'novadesk_theme';
 const SIDEBAR_KEY = 'novadesk_sidebar';
@@ -139,6 +143,8 @@ interface AppContextType {
   setMobileNavOpen: (v: boolean) => void;
   // Notifications
   notificationCount: number;
+  hasMoreNotifications: boolean;
+  loadMoreNotifications: () => Promise<void>;
   notifications: NotificationItem[];
   markNotificationRead: (id: string) => Promise<void>;
   markAllNotificationsRead: () => Promise<void>;
@@ -173,6 +179,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [hasMoreNotifications, setHasMoreNotifications] = useState(false);
+  const applyNotificationPage = (page: NotificationPage) => {
+    setNotifications(page.items);
+    setHasMoreNotifications(page.hasMore);
+    setUnreadCount(page.unreadCount);
+  };
   const [route, setRoute] = useState<Route>(() => parseHash(window.location.hash));
   const [theme, setThemeState] = useState<ThemePreference>(() => (store.get(THEME_KEY) as ThemePreference) || 'light');
   const [sidebarCollapsed, setSidebarCollapsedState] = useState(() => store.get(SIDEBAR_KEY) === 'collapsed');
@@ -265,12 +278,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const [employeesRes, wsRes, notifsRes, projectsRes] = await Promise.all([
         api.get<User[]>('/api/employees'),
         api.get<{ workspace: UserWorkspace }>('/api/workspace'),
-        api.get<NotificationItem[]>('/api/notifications'),
+        api.get<NotificationPage>(`/api/notifications?limit=${NOTIFICATION_PAGE}`),
         api.get<Project[]>('/api/projects'),
       ]);
       setAllEmployees(employeesRes);
       setWorkspace(wsRes.workspace);
-      setNotifications(notifsRes);
+      applyNotificationPage(notifsRes);
       setProjects(projectsRes);
 
       // No link in the address bar: resume where this person left off
@@ -331,7 +344,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   useEffect(() => {
-    loadInitialData();
+    const sso = window.location.hash.match(/^#\/sso\/([\w-]+)$/);
+    if (sso) {
+      // Swap the one-time code for this tab's session, then continue as a normal sign-in
+      window.history.replaceState(null, '', '#/');
+      api
+        .post<{ token: string }>('/api/auth/sso/exchange', { code: sso[1] })
+        .then((res) => {
+          setStoredToken(res.token);
+          return loadInitialData();
+        })
+        .catch((err) => {
+          window.history.replaceState(null, '', `#/sso-error/${encodeURIComponent(err.message || 'Sign-in failed')}`);
+          setAuthStatus('signed_out');
+        });
+    } else {
+      loadInitialData();
+    }
     const handleUnauthorized = () => logout();
     window.addEventListener(UNAUTHORIZED_EVENT, handleUnauthorized);
     return () => window.removeEventListener(UNAUTHORIZED_EVENT, handleUnauthorized);
@@ -421,13 +450,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         dropped = false;
         refreshProjects();
         refreshWorkspace();
-        api.get<NotificationItem[]>('/api/notifications').then(setNotifications).catch(() => {});
+        api.get<NotificationPage>(`/api/notifications?limit=${NOTIFICATION_PAGE}`).then(applyNotificationPage).catch(() => {});
         listeners.current.forEach((l) => l({ type: 'reconnected' }));
       }
     };
     return openEventStream((event) => {
       if (event.type === 'notification') {
         setNotifications((prev) => [event.notification, ...prev.filter((n) => n.id !== event.notification.id)]);
+        setUnreadCount((c) => c + 1);
         // Being added to a project should make it appear in the sidebar right away
         refreshProjects();
       }
@@ -486,7 +516,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   // ---------- Notifications ----------
+  const loadMoreNotifications = async () => {
+    const oldest = notifications[notifications.length - 1];
+    if (!oldest) return;
+    const page = await api.get<NotificationPage>(`/api/notifications?limit=${NOTIFICATION_PAGE}&before=${encodeURIComponent(oldest.timestamp)}`);
+    setNotifications((prev) => [...prev, ...page.items.filter((n) => !prev.some((p) => p.id === n.id))]);
+    setHasMoreNotifications(page.hasMore);
+    setUnreadCount(page.unreadCount);
+  };
+
   const markNotificationRead = async (id: string) => {
+    if (notifications.some((n) => n.id === id && !n.read)) setUnreadCount((c) => Math.max(0, c - 1));
     setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
     try {
       await api.post(`/api/notifications/${id}/read`);
@@ -496,6 +536,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const markAllNotificationsRead = async () => {
+    setUnreadCount(0);
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
     try {
       await api.post('/api/notifications/read-all');
@@ -504,7 +545,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const notificationCount = notifications.filter((n) => !n.read).length;
+  const notificationCount = unreadCount;
 
   return (
     <AppContext.Provider
@@ -536,6 +577,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         mobileNavOpen,
         setMobileNavOpen,
         notificationCount,
+        hasMoreNotifications,
+        loadMoreNotifications,
         notifications,
         markNotificationRead,
         markAllNotificationsRead,

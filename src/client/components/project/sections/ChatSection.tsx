@@ -15,7 +15,8 @@ const dayLabel = (iso: string) => {
 };
 
 export const ChatSection: React.FC = () => {
-  const { projectId, chatMessages, setChatMessages } = useProject();
+  const { projectId, chatMessages, setChatMessages, chatHasMore, loadOlderChat } = useProject();
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const { currentUser, showToast } = useApp();
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
@@ -25,7 +26,24 @@ export const ChatSection: React.FC = () => {
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [chatMessages.length]);
+  }, [chatMessages[chatMessages.length - 1]?.id]);
+
+  // Older messages are added above; keep the view where it was
+  const showOlder = async () => {
+    const el = scrollRef.current;
+    const before = el ? el.scrollHeight - el.scrollTop : 0;
+    setLoadingOlder(true);
+    try {
+      await loadOlderChat();
+      requestAnimationFrame(() => {
+        if (el) el.scrollTop = el.scrollHeight - before;
+      });
+    } catch (err: any) {
+      showToast(err.message || 'Could not load older messages', 'error');
+    } finally {
+      setLoadingOlder(false);
+    }
+  };
 
   const send = async () => {
     const text = draft.trim();
@@ -48,6 +66,13 @@ export const ChatSection: React.FC = () => {
   return (
     <div className="max-w-3xl h-[calc(100dvh-260px)] min-h-[420px] flex flex-col border border-line rounded-lg overflow-hidden">
       <div ref={scrollRef} role="log" aria-live="polite" aria-label="Chat messages" className="flex-1 overflow-y-auto px-4 sm:px-5 py-4">
+        {chatHasMore && (
+          <div className="flex justify-center mb-3">
+            <button onClick={showOlder} disabled={loadingOlder} className="h-7 px-3 rounded-full border border-line text-[13px] text-fg-muted hover:text-fg hover:bg-hover disabled:opacity-50">
+              {loadingOlder ? 'Loading…' : 'Load earlier messages'}
+            </button>
+          </div>
+        )}
         {chatMessages.length === 0 && <p className="text-sm text-fg-muted text-center py-10">No messages yet. Start the conversation.</p>}
         {chatMessages.map((msg) => {
           const day = dayLabel(msg.timestamp);

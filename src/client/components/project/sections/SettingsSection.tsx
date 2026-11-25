@@ -6,6 +6,7 @@ import { api } from '../../../services/api';
 import { useApp } from '../../../context/AppContext';
 import { useProject } from '../ProjectContext';
 import { Button, Field, inputClass, selectClass, textareaClass } from '../../ui/Field';
+import { Modal } from '../../ui/Modal';
 
 type Form = Pick<Project, 'name' | 'code' | 'description' | 'category' | 'status' | 'priority' | 'startDate' | 'targetDate'> & {
   stage: ProjectStage;
@@ -36,6 +37,80 @@ const Row: React.FC<{ title: string; description: string; children: React.ReactN
     <div className="space-y-3">{children}</div>
   </div>
 );
+
+/** Turns this project's tasks and milestones into a template for future projects. */
+const SaveAsTemplate: React.FC = () => {
+  const { projectId, project, tasks, milestones } = useProject();
+  const { showToast } = useApp();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await api.post(`/api/projects/${projectId}/save-as-template`, { name, description });
+      showToast(`Template “${name}” saved. Choose it under New project → Start from.`, 'success');
+      setOpen(false);
+    } catch (err: any) {
+      showToast(err.message || 'Could not save the template', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <section aria-labelledby="reuse-heading" className="mt-10">
+      <h3 id="reuse-heading" className="text-sm font-medium text-fg mb-2">
+        Reuse
+      </h3>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 border border-line rounded-lg">
+        <div>
+          <div className="text-sm text-fg">Save as template</div>
+          <p className="text-[13px] text-fg-muted">
+            Start future projects with this project's {tasks.length} tasks and {milestones.length} milestones. Dates are kept as days from the start.
+          </p>
+        </div>
+        <Button
+          variant="secondary"
+          onClick={() => {
+            setName(project.name);
+            setDescription('');
+            setOpen(true);
+          }}
+        >
+          Save as template
+        </Button>
+      </div>
+      <Modal
+        open={open}
+        onClose={() => setOpen(false)}
+        title="Save as template"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={save} disabled={saving || !name.trim()}>
+              {saving ? 'Saving…' : 'Save template'}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <Field label="Template name" required>
+            <input data-autofocus className={inputClass} value={name} onChange={(e) => setName(e.target.value)} />
+          </Field>
+          <Field label="What it's for">
+            <textarea rows={2} className={textareaClass} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="e.g. Our standard e-commerce build" />
+          </Field>
+          <p className="text-[13px] text-fg-muted">Tasks are copied without their assignees, comments or progress.</p>
+        </div>
+      </Modal>
+    </section>
+  );
+};
 
 export const SettingsSection: React.FC = () => {
   const { projectId, project, setProject, canManage, reload } = useProject();
@@ -123,7 +198,7 @@ export const SettingsSection: React.FC = () => {
                 <input className={inputClass} value={form.name} onChange={(e) => set({ name: e.target.value })} required />
               </Field>
               <Field label="Code">
-                <input className={`${inputClass} font-mono uppercase`} value={form.code} onChange={(e) => set({ code: e.target.value })} maxLength={20} />
+                <input className={`${inputClass} font-mono uppercase placeholder:normal-case`} value={form.code} onChange={(e) => set({ code: e.target.value })} maxLength={20} />
               </Field>
             </div>
             <Field label="Category">
@@ -198,6 +273,8 @@ export const SettingsSection: React.FC = () => {
           </div>
         )}
       </form>
+
+      {canManage && <SaveAsTemplate />}
 
       {canManage && (
         <section aria-labelledby="danger-zone" className="mt-10">

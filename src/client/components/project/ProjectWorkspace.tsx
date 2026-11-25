@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Star, Link as LinkIcon, AlertCircle } from 'lucide-react';
+import { Star, Link as LinkIcon, AlertCircle, FileText } from 'lucide-react';
 import {
   Project,
   Task,
@@ -12,6 +12,7 @@ import {
   ProjectActivity,
   User,
   ProjectSection,
+  Page,
 } from '../../../types';
 import { api } from '../../services/api';
 import { useApp, canManage as canManageProject } from '../../context/AppContext';
@@ -34,6 +35,7 @@ import { TeamSection } from './sections/TeamSection';
 import { DeliverablesSection } from './sections/DeliverablesSection';
 import { ActivitySection } from './sections/ActivitySection';
 import { SettingsSection } from './sections/SettingsSection';
+import { ReportSection } from './sections/ReportSection';
 
 const SECTION_COMPONENTS: Record<ProjectSection, React.FC> = {
   overview: OverviewSection,
@@ -49,18 +51,29 @@ const SECTION_COMPONENTS: Record<ProjectSection, React.FC> = {
   deliverables: DeliverablesSection,
   activity: ActivitySection,
   settings: SettingsSection,
+  report: ReportSection,
 };
+
+const PAGE_SIZE = 50;
+
+// Merge a fresh page into what's loaded, so older pages someone opened stay visible
+function mergeById<T extends { id: string; timestamp: string }>(prev: T[], next: T[], newestFirst: boolean): T[] {
+  const byId = new Map(prev.map((i) => [i.id, i]));
+  for (const i of next) byId.set(i.id, i);
+  return [...byId.values()].sort((a, b) => (newestFirst ? b.timestamp.localeCompare(a.timestamp) : a.timestamp.localeCompare(b.timestamp)));
+}
 
 const ENDPOINTS: Record<ProjectResource, string> = {
   tasks: 'tasks',
   milestones: 'milestones',
   deliverables: 'deliverables',
-  chat: 'chat',
+  // Long lists load the newest page; older items load on request
+  chat: `chat?limit=${PAGE_SIZE}`,
   files: 'files',
   notes: 'notes',
   links: 'links',
   team: 'team',
-  activity: 'activity',
+  activity: `activity?limit=${PAGE_SIZE}`,
 };
 
 export const ProjectWorkspace: React.FC<{ projectId: string }> = ({ projectId }) => {
@@ -81,6 +94,8 @@ export const ProjectWorkspace: React.FC<{ projectId: string }> = ({ projectId })
   const [links, setLinks] = useState<ProjectLink[]>([]);
   const [teamMembers, setTeamMembers] = useState<User[]>([]);
   const [activities, setActivities] = useState<ProjectActivity[]>([]);
+  const [chatHasMore, setChatHasMore] = useState(false);
+  const [activityHasMore, setActivityHasMore] = useState(false);
 
   const [editor, setEditor] = useState<{ task?: Task; defaults?: Partial<Task> } | null>(null);
   // Tasks hidden locally while their delete can still be undone
@@ -90,12 +105,18 @@ export const ProjectWorkspace: React.FC<{ projectId: string }> = ({ projectId })
     tasks: (list: Task[]) => setTasks(list.filter((t) => !pendingDeletes.current.has(t.id))),
     milestones: setMilestones,
     deliverables: setDeliverables,
-    chat: setChatMessages,
+    chat: (page: Page<ProjectChatMessage>) => {
+      setChatMessages((prev) => mergeById(prev, page.items, false));
+      setChatHasMore((more) => more || page.hasMore);
+    },
     files: setFiles,
     notes: setNotes,
     links: setLinks,
     team: setTeamMembers,
-    activity: setActivities,
+    activity: (page: Page<ProjectActivity>) => {
+      setActivities((prev) => mergeById(prev, page.items, true));
+      setActivityHasMore((more) => more || page.hasMore);
+    },
   };
 
   const reload = useCallback(
@@ -254,6 +275,22 @@ export const ProjectWorkspace: React.FC<{ projectId: string }> = ({ projectId })
     teamMembers,
     setTeamMembers,
     activities,
+    chatHasMore,
+    activityHasMore,
+    loadOlderChat: async () => {
+      const oldest = chatMessages[0];
+      if (!oldest) return;
+      const page = await api.get<Page<ProjectChatMessage>>(`/api/projects/${projectId}/chat?limit=${PAGE_SIZE}&before=${encodeURIComponent(oldest.timestamp)}`);
+      setChatMessages((prev) => mergeById(prev, page.items, false));
+      setChatHasMore(page.hasMore);
+    },
+    loadMoreActivity: async () => {
+      const oldest = activities[activities.length - 1];
+      if (!oldest) return;
+      const page = await api.get<Page<ProjectActivity>>(`/api/projects/${projectId}/activity?limit=${PAGE_SIZE}&before=${encodeURIComponent(oldest.timestamp)}`);
+      setActivities((prev) => mergeById(prev, page.items, true));
+      setActivityHasMore(page.hasMore);
+    },
     reload,
     canManage: canManageProject(currentUser, project),
     updateTask,
@@ -299,6 +336,14 @@ export const ProjectWorkspace: React.FC<{ projectId: string }> = ({ projectId })
           crumbs={[projectsCrumb, project.name]}
           actions={
             <>
+              <button
+                onClick={() => openProject(projectId, 'report')}
+                className="h-7 px-2 flex items-center gap-1.5 rounded-md text-[13px] text-fg-muted hover:bg-hover hover:text-fg"
+                title="A printable summary to share with the client"
+              >
+                <FileText size={14} />
+                <span className="hidden sm:inline">Client summary</span>
+              </button>
               <button onClick={copyLink} className="h-7 px-2 flex items-center gap-1.5 rounded-md text-[13px] text-fg-muted hover:bg-hover hover:text-fg" title="Copy a link to this page">
                 <LinkIcon size={14} />
                 <span className="hidden sm:inline">Copy link</span>

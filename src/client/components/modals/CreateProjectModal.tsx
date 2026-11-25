@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
-import { Client, Project } from '../../../types';
+import { Client, Project, ProjectTemplate } from '../../../types';
 import { api } from '../../services/api';
 import { Modal } from '../ui/Modal';
 import { Field, inputClass, selectClass, textareaClass, Button } from '../ui/Field';
@@ -13,6 +13,8 @@ export const CreateProjectModal: React.FC = () => {
   const { isCreateProjectOpen, setIsCreateProjectOpen, openProject, refreshProjects, allEmployees, currentUser, showToast } = useApp();
 
   const [clients, setClients] = useState<Client[]>([]);
+  const [templates, setTemplates] = useState<ProjectTemplate[]>([]);
+  const [templateId, setTemplateId] = useState('');
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
   const [clientId, setClientId] = useState('');
@@ -30,6 +32,10 @@ export const CreateProjectModal: React.FC = () => {
     if (!isCreateProjectOpen) return;
     setSelectedTeam(currentUser ? [currentUser.id] : []);
     api
+      .get<ProjectTemplate[]>('/api/templates')
+      .then(setTemplates)
+      .catch(() => setTemplates([]));
+    api
       .get<Client[]>('/api/clients')
       .then((data) => {
         setClients(data);
@@ -37,6 +43,13 @@ export const CreateProjectModal: React.FC = () => {
       })
       .catch((err) => setError(err.message));
   }, [isCreateProjectOpen, currentUser]);
+
+  const chosen = templates.find((t) => t.id === templateId);
+  const builtIn = templates.filter((t) => t.builtIn);
+  const custom = templates.filter((t) => !t.builtIn);
+  const templateHint = chosen
+    ? `${chosen.description ? `${chosen.description} ` : ''}Adds ${chosen.tasks.length} tasks and ${chosen.milestones.length} milestones, dated from the start date and assigned to you.`
+    : 'Start empty, or from a template with its usual tasks and milestones.';
 
   const close = () => {
     setIsCreateProjectOpen(false);
@@ -62,6 +75,7 @@ export const CreateProjectModal: React.FC = () => {
         targetDate,
         description: description.trim(),
         teamMemberIds: selectedTeam,
+        templateId: templateId || undefined,
       });
 
       close();
@@ -73,6 +87,7 @@ export const CreateProjectModal: React.FC = () => {
       setCode('');
       setCategory('');
       setDescription('');
+      setTemplateId('');
       setStartDate(today());
       setTargetDate(inDays(90));
     } catch (err: any) {
@@ -111,6 +126,30 @@ export const CreateProjectModal: React.FC = () => {
             {error}
           </p>
         )}
+        <Field label="Start from" hint={templateHint}>
+          <select value={templateId} onChange={(e) => setTemplateId(e.target.value)} className={selectClass}>
+            <option value="">Blank project</option>
+            {builtIn.length > 0 && (
+              <optgroup label="Templates">
+                {builtIn.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            {custom.length > 0 && (
+              <optgroup label="Made by your office">
+                {custom.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+          </select>
+        </Field>
+
         <Field label="Project name" required>
           <input data-autofocus type="text" required placeholder="e.g. Mobile checkout portal" value={name} onChange={(e) => setName(e.target.value)} className={inputClass} />
         </Field>
@@ -126,7 +165,7 @@ export const CreateProjectModal: React.FC = () => {
             </select>
           </Field>
           <Field label="Project code" hint="Leave blank to generate one">
-            <input type="text" placeholder="e.g. MOB-500" value={code} onChange={(e) => setCode(e.target.value)} className={`${inputClass} font-mono uppercase`} maxLength={20} />
+            <input type="text" placeholder="e.g. MOB-500" value={code} onChange={(e) => setCode(e.target.value)} className={`${inputClass} font-mono uppercase placeholder:normal-case placeholder:font-sans`} maxLength={20} />
           </Field>
           <Field label="Category">
             <input type="text" placeholder="e.g. Mobile engineering" value={category} onChange={(e) => setCategory(e.target.value)} className={inputClass} />

@@ -2,12 +2,82 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Download, DatabaseBackup } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { api } from '../../services/api';
-import { BackupInfo } from '../../../types';
+import { BackupInfo, ProjectTemplate } from '../../../types';
 import { Button } from '../ui/Field';
 import { formatDateTime, timeAgo } from '../ui/Badges';
 import { PageShell } from '../layout/PageShell';
 
 const size = (bytes: number) => (bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`);
+
+/** Built-in and office-made project templates; office-made ones can be removed. */
+const TemplatesSection: React.FC = () => {
+  const { confirm, showToast } = useApp();
+  const [templates, setTemplates] = useState<ProjectTemplate[]>([]);
+
+  const load = useCallback(() => {
+    api.get<ProjectTemplate[]>('/api/templates').then(setTemplates).catch((err) => showToast(err.message, 'error'));
+  }, [showToast]);
+  useEffect(load, [load]);
+
+  const remove = async (t: ProjectTemplate) => {
+    const ok = await confirm({ title: `Delete “${t.name}”?`, message: 'Projects already made from it are not affected.', confirmLabel: 'Delete', danger: true });
+    if (!ok) return;
+    try {
+      await api.delete(`/api/templates/${t.id}`);
+      load();
+    } catch (err: any) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  return (
+    <section className="mb-10" aria-labelledby="templates-heading">
+      <h2 id="templates-heading" className="text-base font-semibold text-fg">
+        Project templates
+      </h2>
+      <p className="text-sm text-fg-muted mt-1">
+        Offered under New project → Start from. Project leads add their own with Settings → Save as template.
+      </p>
+      <ul className="mt-3 border border-line rounded-lg divide-y divide-line">
+        {templates.map((t) => (
+          <li key={t.id} className="flex items-center gap-3 px-3 py-2 hover:bg-subtle">
+            <div className="flex-1 min-w-0">
+              <div className="text-sm text-fg">{t.name}</div>
+              <div className="text-xs text-fg-faint truncate">
+                {t.tasks.length} tasks · {t.milestones.length} milestones · {t.builtIn ? 'built in' : `by ${t.createdByName ?? 'someone'}`}
+              </div>
+            </div>
+            {!t.builtIn && (
+              <Button variant="ghost" size="sm" onClick={() => remove(t)}>
+                Delete
+              </Button>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+};
+
+/** Whether company single sign-on is on; it's switched on in the server's .env file. */
+const SignInSection: React.FC = () => {
+  const [sso, setSso] = useState<{ enabled: boolean; label?: string } | null>(null);
+  useEffect(() => {
+    api.get<{ enabled: boolean; label?: string }>('/api/auth/sso/config').then(setSso).catch(() => setSso({ enabled: false }));
+  }, []);
+  return (
+    <section className="mb-10" aria-labelledby="signin-heading">
+      <h2 id="signin-heading" className="text-base font-semibold text-fg">
+        Sign-in
+      </h2>
+      <p className="text-sm text-fg-muted mt-1">
+        {sso?.enabled
+          ? `Company single sign-on is on: people can sign in with ${sso.label}. Passwords still work, for example for accounts outside the company directory.`
+          : 'People sign in with email and password. Company single sign-on (Microsoft 365, Google Workspace and others) can be switched on in the server settings; see SETUP.md.'}
+      </p>
+    </section>
+  );
+};
 
 export const AdminView: React.FC = () => {
   const { currentUser, navigate, showToast } = useApp();
@@ -74,6 +144,9 @@ export const AdminView: React.FC = () => {
           Manage people
         </Button>
       </section>
+
+      <TemplatesSection />
+      <SignInSection />
 
       <section aria-labelledby="backups-heading">
         <div className="flex flex-wrap items-end justify-between gap-3">

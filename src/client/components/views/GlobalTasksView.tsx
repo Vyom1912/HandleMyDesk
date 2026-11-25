@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Check } from 'lucide-react';
+import { Check, Download } from 'lucide-react';
+import { downloadCsv } from '../../services/exports';
+import { Button } from '../ui/Field';
 import { useApp } from '../../context/AppContext';
 import { Task } from '../../../types';
 import { api } from '../../services/api';
@@ -65,7 +67,21 @@ export const GlobalTasksView: React.FC = () => {
   const groups = BUCKETS.map((b) => ({ name: b, items: visible.filter((t) => bucketOf(t) === b) })).filter((g) => g.items.length > 0);
 
   return (
-    <PageShell title="My tasks" description="Your work across every project, by due date" width="narrow">
+    <PageShell
+      title="My tasks"
+      description="Your work across every project, by due date"
+      width="narrow"
+      actions={
+        <Button
+          variant="secondary"
+          onClick={() =>
+            downloadCsv(`/api/tasks/export.csv${filter === 'assigned_to_me' ? '?filter=assigned_to_me' : ''}`, filter === 'assigned_to_me' ? 'my-tasks' : 'tasks').catch((err) => showToast(err.message, 'error'))
+          }
+        >
+          <Download size={15} /> Export CSV
+        </Button>
+      }
+    >
       <div className="flex flex-wrap items-center gap-2 mb-6">
         <Segmented
           label="Whose tasks"

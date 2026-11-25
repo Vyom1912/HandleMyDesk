@@ -108,7 +108,36 @@ npm run build
 npm start
 ```
 
-Database changes are applied automatically at start-up.
+Database changes are applied automatically at start-up, once each. Before changing existing data, NovaDesk saves a `-premigrate` backup and logs what it updated. `/api/health` shows the current database version (`schemaVersion`).
+
+## 7. Company sign-in (optional)
+
+People can sign in with their Microsoft 365 / Entra ID, Google Workspace or other OpenID Connect account instead of a NovaDesk password. Accounts are matched by email address, so add people on the Team page first (or turn on automatic accounts below). Passwords keep working alongside.
+
+1. Register an app with your provider:
+   - **Microsoft Entra ID:** App registrations → New registration. Redirect URI (Web): `https://<your NovaDesk address>/api/auth/sso/callback`. Under Certificates & secrets, create a client secret.
+   - **Google Workspace:** Google Cloud console → APIs & Services → Credentials → OAuth client ID (Web application), with the same redirect URI.
+2. Add to `.env`:
+
+   ```
+   SSO_ISSUER=https://login.microsoftonline.com/<tenant-id>/v2.0   # Google: https://accounts.google.com
+   SSO_CLIENT_ID=<application (client) id>
+   SSO_CLIENT_SECRET=<client secret>
+   SSO_REDIRECT_URL=https://<your NovaDesk address>/api/auth/sso/callback
+   SSO_LABEL=Microsoft                                              # text on the sign-in button
+   # SSO_AUTO_CREATE=true   # give people without an account one (as Members) at first sign-in
+   ```
+
+3. Restart NovaDesk. The sign-in page shows **Continue with Microsoft** (or your label); **Admin → Sign-in** confirms it's on.
+
+Deactivated people are refused even if the provider accepts them. Use your tenant-specific issuer for Microsoft (not `common`), so only your organisation can sign in.
+
+## 8. Logs
+
+NovaDesk writes one line per request to its output: time, method, path, status, duration and user, for example `09:41:07 GET /api/projects 200 4ms emp-3`. Set `LOG_FORMAT=json` for JSON lines that log tools can read. Each response carries an `X-Request-Id` header, and server errors show a reference id to the person; search the log for that id to find the error.
+
+To keep logs, redirect the output to a file in your start-up task, for example `npm start >> logs
+ovadesk.log 2>&1`.
 
 ## People and access
 
@@ -120,6 +149,7 @@ Database changes are applied automatically at start-up.
 
 - **Someone leaves:** Team → ⋯ → **Deactivate**. They're signed out at once and can't sign in again; their work stays in place.
 - **Forgotten password:** Team → ⋯ → **Reset password**. Their sessions end, and they get a new temporary password.
+- **Templates:** New project → Start from offers built-in templates (website, client onboarding, internal improvement). A project lead can turn any project into a template under Settings → Save as template. Admins see and delete them under Admin → Project templates.
 - **Lost or shared device:** in **Account**, anyone can choose **Sign out of all devices**. Changing your password does the same for your other devices.
 - There is always at least one active admin; the last one can't be removed or demoted.
 - There's no limit on sign-in attempts, so nobody gets locked out. Keep NovaDesk on the office network (or behind a VPN) and don't expose it directly to the internet.
@@ -134,6 +164,8 @@ Database changes are applied automatically at start-up.
 | `This is a new installation with an empty database` | Fill in the `INITIAL_ADMIN_*` settings in `.env`. |
 | `No built app found in dist/` | Run `npm run build`. |
 | Live updates don't arrive behind a proxy | Turn off response buffering for the proxy (`flush_interval -1` in Caddy). |
+| Company sign-in says there's no account | Add the person on the Team page with the same email, or set `SSO_AUTO_CREATE=true`. |
+| "Something went wrong… Reference: …" | Search the server log for that reference id to see the error. |
 
 Which copy is answering? `http://<server>:3001/api/health` shows its process number and uptime.
 

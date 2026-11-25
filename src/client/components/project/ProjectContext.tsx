@@ -36,6 +36,11 @@ export interface ProjectContextValue {
   teamMembers: User[];
   setTeamMembers: React.Dispatch<React.SetStateAction<User[]>>;
   activities: ProjectActivity[];
+  // Chat and activity load the newest page first
+  chatHasMore: boolean;
+  activityHasMore: boolean;
+  loadOlderChat: () => Promise<void>;
+  loadMoreActivity: () => Promise<void>;
   // Re-fetch the project record and/or specific resources from the server
   reload: (...resources: Array<ProjectResource | 'project'>) => Promise<void>;
   canManage: boolean;

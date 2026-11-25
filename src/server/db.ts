@@ -20,6 +20,7 @@ import {
   UserWorkspace,
   NotificationItem,
   TaskComment,
+  ProjectTemplate,
 } from '../types';
 
 export interface DatabaseSchema {
@@ -37,6 +38,7 @@ export interface DatabaseSchema {
   workspaces: Record<string, UserWorkspace>; // keyed by userId
   notifications: NotificationItem[];
   comments: TaskComment[];
+  templates: ProjectTemplate[];
 }
 
 type CollectionKey = keyof DatabaseSchema;
@@ -56,6 +58,7 @@ const COLLECTIONS: CollectionKey[] = [
   'workspaces',
   'notifications',
   'comments',
+  'templates',
 ];
 
 export { DATA_DIR };
@@ -1237,6 +1240,7 @@ function freshSeed(): DatabaseSchema {
     workspaces: clone(INITIAL_WORKSPACES),
     notifications: clone(INITIAL_NOTIFICATIONS),
     comments: [],
+    templates: [],
   };
 }
 
@@ -1256,6 +1260,7 @@ function emptySchema(): DatabaseSchema {
     workspaces: {},
     notifications: [],
     comments: [],
+    templates: [],
   };
 }
 
@@ -1306,6 +1311,42 @@ function bootstrapAdminFromEnv(): { user: User; password: string } {
 // Demo data is for development only, unless explicitly requested with SEED_DEMO=true
 const SEED_DEMO = process.env.SEED_DEMO ? process.env.SEED_DEMO === 'true' : !IS_PROD;
 
+/**
+ * Database changes, applied once each, in order, and recorded in schema_migrations.
+ * `sql` runs before the data is loaded (table/column changes); `data` runs after, on the
+ * loaded documents (backfills). Add new entries at the end; never edit an applied one.
+ */
+interface Migration {
+  version: number;
+  name: string;
+  sql?: (sql: DatabaseSync) => void;
+  data?: (data: DatabaseSchema) => void;
+}
+
+const columnsOf = (sql: DatabaseSync, table: string) =>
+  (sql.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).map((c) => c.name);
+
+const MIGRATIONS: Migration[] = [
+  {
+    version: 1,
+    name: 'Sign-in: session versions and forced password changes',
+    sql: (sql) => {
+      const columns = columnsOf(sql, 'credentials');
+      if (!columns.includes('session_version')) sql.exec('ALTER TABLE credentials ADD COLUMN session_version INTEGER NOT NULL DEFAULT 0');
+      if (!columns.includes('must_change')) sql.exec('ALTER TABLE credentials ADD COLUMN must_change INTEGER NOT NULL DEFAULT 0');
+    },
+  },
+  {
+    version: 2,
+    name: 'Projects: record a stage for projects created before stages existed',
+    data: (data) => {
+      for (const p of data.projects) if (!p.stage) p.stage = p.status === 'completed' ? 'delivered' : 'in_progress';
+    },
+  },
+];
+
+export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
+
 let seedPasswordHash: string | null = null;
 function getSeedPasswordHash(): string {
   if (!seedPasswordHash) seedPasswordHash = bcrypt.hashSync(SEED_PASSWORD, 10);
@@ -1332,11 +1373,34 @@ export class Database {
       this.sql.exec(`CREATE TABLE IF NOT EXISTS ${c} (id TEXT PRIMARY KEY, pos INTEGER NOT NULL, data TEXT NOT NULL)`);
     }
     this.sql.exec('CREATE TABLE IF NOT EXISTS credentials (user_id TEXT PRIMARY KEY, password_hash TEXT NOT NULL)');
-    // Added later: session_version invalidates old sign-ins, must_change forces a new password
-    const columns = (this.sql.prepare('PRAGMA table_info(credentials)').all() as Array<{ name: string }>).map((c) => c.name);
-    if (!columns.includes('session_version')) this.sql.exec('ALTER TABLE credentials ADD COLUMN session_version INTEGER NOT NULL DEFAULT 0');
-    if (!columns.includes('must_change')) this.sql.exec('ALTER TABLE credentials ADD COLUMN must_change INTEGER NOT NULL DEFAULT 0');
+    this.sql.exec('CREATE TABLE IF NOT EXISTS schema_migrations (version INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at TEXT NOT NULL)');
+
+    const applied = new Set((this.sql.prepare('SELECT version FROM schema_migrations').all() as Array<{ version: number }>).map((r) => r.version));
+    const pending = MIGRATIONS.filter((m) => !applied.has(m.version));
+    const { n: existingUsers } = this.sql.prepare('SELECT COUNT(*) AS n FROM users').get() as { n: number };
+
+    // Existing data gets a safety copy before it's changed
+    if (pending.length && existingUsers > 0 && file !== ':memory:') {
+      const info = createBackup(this.sql, 'premigrate');
+      console.log(`Saved ${info.name} before updating the database`);
+    }
+
+    for (const m of pending) m.sql?.(this.sql);
     this.load();
+    if (pending.some((m) => m.data)) {
+      for (const m of pending) m.data?.(this.data);
+      this.save();
+    }
+    const record = this.sql.prepare('INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)');
+    for (const m of pending) {
+      record.run(m.version, m.name, new Date().toISOString());
+      if (existingUsers > 0) console.log(`Database updated: ${m.version}. ${m.name}`);
+    }
+  }
+
+  public schemaVersion(): number {
+    const row = this.sql.prepare('SELECT MAX(version) AS v FROM schema_migrations').get() as { v: number | null };
+    return row.v ?? 0;
   }
 
   private load() {
