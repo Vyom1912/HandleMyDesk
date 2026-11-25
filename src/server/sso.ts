@@ -13,11 +13,11 @@ import { User } from '../types';
  *   SSO_ISSUER          e.g. https://login.microsoftonline.com/<tenant-id>/v2.0 or https://accounts.google.com
  *   SSO_CLIENT_ID       from the app registration
  *   SSO_CLIENT_SECRET   from the app registration
- *   SSO_REDIRECT_URL    https://<your NovaDesk address>/api/auth/sso/callback
+ *   SSO_REDIRECT_URL    https://<your HandleMyDesk address>/api/auth/sso/callback
  *   SSO_LABEL           button text, e.g. "Microsoft" (default "your company account")
- *   SSO_AUTO_CREATE     true: people without a NovaDesk account get one (as Members) at first sign-in
+ *   SSO_AUTO_CREATE     true: people without a HandleMyDesk account get one (as Members) at first sign-in
  *
- * Flow: authorization code with PKCE. After the provider sends the person back, NovaDesk hands the
+ * Flow: authorization code with PKCE. After the provider sends the person back, HandleMyDesk hands the
  * browser a one-time code (valid 60 seconds) that the app exchanges for its normal sign-in token.
  */
 
@@ -181,7 +181,7 @@ ssoRouter.get('/api/auth/sso/callback', async (req: Request, res: Response) => {
 
     let user = db.getData().users.find((u) => u.email.toLowerCase() === email);
     if (!user) {
-      if (!c.autoCreate) return fail(res, `There's no NovaDesk account for ${email}. Ask an administrator to add you.`);
+      if (!c.autoCreate) return fail(res, `There's no HandleMyDesk account for ${email}. Ask an administrator to add you.`);
       user = createUser(typeof payload.name === 'string' && payload.name.trim() ? payload.name.trim() : email.split('@')[0], email);
     }
     if (user.active === false) return fail(res, 'This account has been deactivated. Ask an administrator.');

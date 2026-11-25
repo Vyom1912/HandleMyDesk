@@ -8,7 +8,7 @@ import { markOnboarding } from '../../services/onboarding';
 import { SearchResults } from '../../../types';
 
 // The notes section opens this note when it mounts (search results link to a specific note)
-export const OPEN_NOTE_KEY = 'novadesk_open_note';
+export const OPEN_NOTE_KEY = 'handlemydesk_open_note';
 
 type Result = { id: string; title: string; subtitle?: string; icon: React.ReactNode; go: () => void; group: 'Projects' | 'Tasks' | 'Notes' | 'Files' | 'People' | 'Pages' };
 

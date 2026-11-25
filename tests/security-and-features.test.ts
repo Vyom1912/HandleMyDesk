@@ -159,7 +159,7 @@ describe('Bug fixes', () => {
   });
 
   it('SQLite persists changes, deletions and order across a reopen', () => {
-    const file = path.join(os.tmpdir(), `novadesk-test-${Date.now()}.db`);
+    const file = path.join(os.tmpdir(), `handlemydesk-test-${Date.now()}.db`);
     try {
       const first = new Database(file);
       const data = first.getData();

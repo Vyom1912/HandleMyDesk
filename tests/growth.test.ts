@@ -112,7 +112,7 @@ describe('Operations', () => {
   });
 
   it('updates an older database once, recording the version and taking a backup first', () => {
-    const file = path.join(os.tmpdir(), `novadesk-migrate-${Date.now()}.db`);
+    const file = path.join(os.tmpdir(), `handlemydesk-migrate-${Date.now()}.db`);
     try {
       // An "older" database: data present, no stages, no migration history
       new Database(file).close();
@@ -172,7 +172,7 @@ describe('Single sign-on', () => {
       const idToken = await new SignJWT({ email: entry.email, name: entry.name, nonce: entry.nonce, email_verified: entry.verified ?? true })
         .setProtectedHeader({ alg: 'RS256', kid: 'test-key' })
         .setIssuer(issuer)
-        .setAudience('novadesk-client')
+        .setAudience('handlemydesk-client')
         .setSubject(entry.email)
         .setIssuedAt()
         .setExpirationTime('5m')
@@ -185,7 +185,7 @@ describe('Single sign-on', () => {
     issuer = `http://127.0.0.1:${(server.address() as any).port}`;
     Object.assign(process.env, {
       SSO_ISSUER: issuer,
-      SSO_CLIENT_ID: 'novadesk-client',
+      SSO_CLIENT_ID: 'handlemydesk-client',
       SSO_CLIENT_SECRET: 'secret',
       SSO_REDIRECT_URL: 'http://localhost/api/auth/sso/callback',
       SSO_LABEL: 'Microsoft',
@@ -233,14 +233,14 @@ describe('Single sign-on', () => {
   });
 
   it('refuses unknown people unless automatic accounts are on', async () => {
-    const { callback } = await signInAs('new.person@novadesk.internal');
-    expect(decodeURIComponent(callback.headers.location)).toContain("There's no NovaDesk account for new.person@novadesk.internal");
+    const { callback } = await signInAs('new.person@handlemydesk.internal');
+    expect(decodeURIComponent(callback.headers.location)).toContain("There's no HandleMyDesk account for new.person@handlemydesk.internal");
 
     process.env.SSO_AUTO_CREATE = 'true';
-    const second = await signInAs('new.person@novadesk.internal');
+    const second = await signInAs('new.person@handlemydesk.internal');
     delete process.env.SSO_AUTO_CREATE;
     expect(second.callback.headers.location).toMatch(/^\/#\/sso\//);
-    const created = db.getData().users.find((u) => u.email === 'new.person@novadesk.internal')!;
+    const created = db.getData().users.find((u) => u.email === 'new.person@handlemydesk.internal')!;
     expect(created).toMatchObject({ role: 'member', name: 'Sam Rivera', active: true });
   });
 

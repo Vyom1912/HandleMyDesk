@@ -4,7 +4,7 @@ import { Modal } from './Modal';
 import { markOnboarding } from '../../services/onboarding';
 
 // Fired by the "n" shortcut; the open project listens and shows its New task dialog
-export const NEW_TASK_EVENT = 'novadesk:new-task';
+export const NEW_TASK_EVENT = 'handlemydesk:new-task';
 
 const GO_TO: Record<string, PageView> = { h: 'home', t: 'tasks', p: 'projects', c: 'clients', m: 'team', a: 'admin' };
 

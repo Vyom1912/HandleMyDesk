@@ -11,7 +11,7 @@ function resolveJwtSecret(): string {
   if (process.env.NODE_ENV === 'production') {
     throw new Error('JWT_SECRET must be set when NODE_ENV=production');
   }
-  if (process.env.NODE_ENV === 'test') return 'novadesk-test-secret';
+  if (process.env.NODE_ENV === 'test') return 'handlemydesk-test-secret';
 
   // Development: generate a random secret once and keep it, so sessions survive server restarts
   const secretFile = path.join(DATA_DIR, '.jwt-secret');

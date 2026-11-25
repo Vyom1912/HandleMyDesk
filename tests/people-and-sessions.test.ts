@@ -21,7 +21,7 @@ async function addPerson(overrides: Record<string, string> = {}) {
   const res = await request(app)
     .post('/api/employees')
     .set(as('emp-1'))
-    .send({ name: 'Nina Okafor', email: 'nina.okafor@novadesk.internal', title: 'Designer', department: 'Design', role: 'member', ...overrides });
+    .send({ name: 'Nina Okafor', email: 'nina.okafor@handlemydesk.internal', title: 'Designer', department: 'Design', role: 'member', ...overrides });
   return res;
 }
 
@@ -31,7 +31,7 @@ describe('Adding people', () => {
     expect(created.status).toBe(201);
     expect(created.body.temporaryPassword).toMatch(/^[a-z2-9]{4}-[a-z2-9]{4}-[a-z2-9]{4}$/);
 
-    const first = await login('nina.okafor@novadesk.internal', created.body.temporaryPassword);
+    const first = await login('nina.okafor@handlemydesk.internal', created.body.temporaryPassword);
     expect(first.status).toBe(200);
     expect(first.body.mustChangePassword).toBe(true);
 

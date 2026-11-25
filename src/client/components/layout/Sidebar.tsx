@@ -53,7 +53,7 @@ const QUICK_SECTIONS: Array<{ id: ProjectSection; label: string; icon: React.Ele
   { id: 'chat', label: 'Chat', icon: MessageSquare },
 ];
 
-const EXPANDED_KEY = (userId: string) => `novadesk_sidebar_expanded_${userId}`;
+const EXPANDED_KEY = (userId: string) => `handlemydesk_sidebar_expanded_${userId}`;
 
 function readExpanded(userId: string): string[] {
   try {
@@ -206,10 +206,10 @@ export const Sidebar: React.FC = () => {
             aria-expanded={menuOpen}
           >
             <span className="w-6 h-6 pointer-fine:w-5 pointer-fine:h-5 rounded bg-fg text-canvas text-[11px] font-bold flex items-center justify-center shrink-0" aria-hidden="true">
-              N
+              H
             </span>
             <span className="flex-1 min-w-0 text-left">
-              <span className="block text-sm font-semibold text-fg truncate leading-tight">NovaDesk</span>
+              <span className="block text-sm font-semibold text-fg truncate leading-tight">HandleMyDesk</span>
               <span className="block text-xs text-fg-faint truncate leading-tight">{currentUser?.name}</span>
             </span>
             <ChevronsUpDown size={13} className="text-fg-faint shrink-0" />

@@ -3,9 +3,10 @@ import '../src/server/env';
 import fs from 'fs';
 import path from 'path';
 import { DatabaseSync } from 'node:sqlite';
-import { DB_PATH, BACKUP_DIR } from '../src/server/paths';
+import { currentDbPath, BACKUP_DIR } from '../src/server/paths';
 import { createBackup } from '../src/server/backups';
 
+const DB_PATH = currentDbPath();
 if (!fs.existsSync(DB_PATH)) {
   console.error(`No database found at ${DB_PATH}`);
   process.exit(1);

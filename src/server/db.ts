@@ -3,7 +3,7 @@ import path from 'path';
 import os from 'os';
 import { DatabaseSync } from 'node:sqlite';
 import bcrypt from 'bcryptjs';
-import { IS_TEST, IS_PROD, DATA_DIR, DB_PATH, LOCK_FILE } from './paths';
+import { IS_TEST, IS_PROD, DATA_DIR, DB_PATH, LEGACY_DB_PATH, LOCK_FILE } from './paths';
 import { createBackup, pruneBackups, BackupInfo } from './backups';
 import {
   User,
@@ -65,16 +65,16 @@ export { DATA_DIR };
 // Tests run against an in-memory database so they never touch real data
 const DB_FILE = IS_TEST ? ':memory:' : DB_PATH;
 const LEGACY_JSON_FILE = path.join(DATA_DIR, 'db.json');
-export const UPLOADS_DIR = IS_TEST ? path.join(os.tmpdir(), 'novadesk-uploads-test') : path.join(DATA_DIR, 'uploads');
+export const UPLOADS_DIR = IS_TEST ? path.join(os.tmpdir(), 'handlemydesk-uploads-test') : path.join(DATA_DIR, 'uploads');
 
 // Password given to every seeded employee account
-export const SEED_PASSWORD = process.env.SEED_PASSWORD || 'novadesk123';
+export const SEED_PASSWORD = process.env.SEED_PASSWORD || 'handlemydesk123';
 
 const INITIAL_USERS: User[] = [
   {
     id: 'emp-1',
     name: 'Sarah Connor',
-    email: 'sarah.connor@novadesk.internal',
+    email: 'sarah.connor@handlemydesk.internal',
     avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150&auto=format&fit=crop&q=80',
     role: 'admin',
     title: 'Director of Operations & Strategy',
@@ -86,7 +86,7 @@ const INITIAL_USERS: User[] = [
   {
     id: 'emp-2',
     name: 'Marcus Vance',
-    email: 'marcus.vance@novadesk.internal',
+    email: 'marcus.vance@handlemydesk.internal',
     avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
     role: 'pm',
     title: 'Lead Systems Architect & PM',
@@ -98,7 +98,7 @@ const INITIAL_USERS: User[] = [
   {
     id: 'emp-3',
     name: 'Elena Rostova',
-    email: 'elena.rostova@novadesk.internal',
+    email: 'elena.rostova@handlemydesk.internal',
     avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
     role: 'pm',
     title: 'Head of Creative & Product PM',
@@ -110,7 +110,7 @@ const INITIAL_USERS: User[] = [
   {
     id: 'emp-4',
     name: 'David Kim',
-    email: 'david.kim@novadesk.internal',
+    email: 'david.kim@handlemydesk.internal',
     avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
     role: 'pm',
     title: 'Agile Delivery Lead',
@@ -122,7 +122,7 @@ const INITIAL_USERS: User[] = [
   {
     id: 'emp-5',
     name: 'Maya Patel',
-    email: 'maya.patel@novadesk.internal',
+    email: 'maya.patel@handlemydesk.internal',
     avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80',
     role: 'member',
     title: 'Senior UX/UI Designer',
@@ -134,7 +134,7 @@ const INITIAL_USERS: User[] = [
   {
     id: 'emp-6',
     name: 'James Thornton',
-    email: 'james.thornton@novadesk.internal',
+    email: 'james.thornton@handlemydesk.internal',
     avatar: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=150&auto=format&fit=crop&q=80',
     role: 'member',
     title: 'Senior Full-Stack Engineer',
@@ -146,7 +146,7 @@ const INITIAL_USERS: User[] = [
   {
     id: 'emp-7',
     name: 'Chloe Bennet',
-    email: 'chloe.bennet@novadesk.internal',
+    email: 'chloe.bennet@handlemydesk.internal',
     avatar: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=150&auto=format&fit=crop&q=80',
     role: 'member',
     title: 'Frontend Specialist',
@@ -158,7 +158,7 @@ const INITIAL_USERS: User[] = [
   {
     id: 'emp-8',
     name: 'Carlos Mendez',
-    email: 'carlos.mendez@novadesk.internal',
+    email: 'carlos.mendez@handlemydesk.internal',
     avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=150&auto=format&fit=crop&q=80',
     role: 'member',
     title: 'DevOps & Cloud Engineer',
@@ -170,7 +170,7 @@ const INITIAL_USERS: User[] = [
   {
     id: 'emp-9',
     name: 'Priya Sharma',
-    email: 'priya.sharma@novadesk.internal',
+    email: 'priya.sharma@handlemydesk.internal',
     avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80',
     role: 'member',
     title: 'QA Automation Lead',
@@ -182,7 +182,7 @@ const INITIAL_USERS: User[] = [
   {
     id: 'emp-10',
     name: 'Alex Rivera',
-    email: 'alex.rivera@novadesk.internal',
+    email: 'alex.rivera@handlemydesk.internal',
     avatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=150&auto=format&fit=crop&q=80',
     role: 'member',
     title: 'Product Analyst',
@@ -194,7 +194,7 @@ const INITIAL_USERS: User[] = [
   {
     id: 'emp-11',
     name: 'Liam O\'Connor',
-    email: 'liam.oconnor@novadesk.internal',
+    email: 'liam.oconnor@handlemydesk.internal',
     avatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&auto=format&fit=crop&q=80',
     role: 'member',
     title: 'Backend Systems Engineer',
@@ -206,7 +206,7 @@ const INITIAL_USERS: User[] = [
   {
     id: 'emp-12',
     name: 'Sophia Chen',
-    email: 'sophia.chen@novadesk.internal',
+    email: 'sophia.chen@handlemydesk.internal',
     avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80',
     role: 'member',
     title: 'Brand Identity Designer',
@@ -218,7 +218,7 @@ const INITIAL_USERS: User[] = [
   {
     id: 'emp-13',
     name: 'Lucas Scott',
-    email: 'lucas.scott@novadesk.internal',
+    email: 'lucas.scott@handlemydesk.internal',
     avatar: 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=150&auto=format&fit=crop&q=80',
     role: 'member',
     title: 'Mobile App Developer',
@@ -230,7 +230,7 @@ const INITIAL_USERS: User[] = [
   {
     id: 'emp-14',
     name: 'Emma Watson',
-    email: 'emma.watson@novadesk.internal',
+    email: 'emma.watson@handlemydesk.internal',
     avatar: 'https://images.unsplash.com/photo-1534751516642-a171edd2521d?w=150&auto=format&fit=crop&q=80',
     role: 'member',
     title: 'Technical Documentation Writer',
@@ -242,7 +242,7 @@ const INITIAL_USERS: User[] = [
   {
     id: 'emp-15',
     name: 'Nathan Drake',
-    email: 'nathan.drake@novadesk.internal',
+    email: 'nathan.drake@handlemydesk.internal',
     avatar: 'https://images.unsplash.com/photo-1501196354995-cbb51c65aaea?w=150&auto=format&fit=crop&q=80',
     role: 'member',
     title: 'Security & Compliance Specialist',
@@ -254,7 +254,7 @@ const INITIAL_USERS: User[] = [
   {
     id: 'emp-16',
     name: 'Olivia Taylor',
-    email: 'olivia.taylor@novadesk.internal',
+    email: 'olivia.taylor@handlemydesk.internal',
     avatar: 'https://images.unsplash.com/photo-1567532939604-b6b5b0db2604?w=150&auto=format&fit=crop&q=80',
     role: 'member',
     title: 'Client Success Manager',
@@ -266,7 +266,7 @@ const INITIAL_USERS: User[] = [
   {
     id: 'emp-17',
     name: 'Zoe Kravitz',
-    email: 'zoe.kravitz@novadesk.internal',
+    email: 'zoe.kravitz@handlemydesk.internal',
     avatar: 'https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?w=150&auto=format&fit=crop&q=80',
     role: 'member',
     title: 'Visual & Motion Designer',
@@ -278,7 +278,7 @@ const INITIAL_USERS: User[] = [
   {
     id: 'emp-18',
     name: 'Ethan Hunt',
-    email: 'ethan.hunt@novadesk.internal',
+    email: 'ethan.hunt@handlemydesk.internal',
     avatar: 'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=150&auto=format&fit=crop&q=80',
     role: 'member',
     title: 'Data & Infrastructure Specialist',
@@ -391,16 +391,16 @@ const INITIAL_CLIENTS: Client[] = [
   {
     id: 'cli-8',
     name: 'Internal Operations',
-    company: 'NovaDesk Internal',
+    company: 'HandleMyDesk Internal',
     industry: 'Internal Office Management',
     contactPerson: 'Sarah Connor',
-    email: 'sarah.connor@novadesk.internal',
+    email: 'sarah.connor@handlemydesk.internal',
     phone: '+1 (555) 019-2831',
     status: 'active',
     totalBilled: 0,
     activeProjectsCount: 1,
     notes: 'Internal office operations, knowledge base, employee tooling and tooling enhancements.',
-    website: 'https://novadesk.internal',
+    website: 'https://handlemydesk.internal',
   },
 ];
 
@@ -1058,7 +1058,7 @@ const INITIAL_LINKS: ProjectLink[] = [
     id: 'lnk-1',
     projectId: 'prj-1',
     title: 'Figma Production Workspace',
-    url: 'https://figma.com/@novadesk/acme-redesign-2026',
+    url: 'https://figma.com/@handlemydesk/acme-redesign-2026',
     category: 'design',
     description: 'Design tokens, component library, high-fidelity responsive screens and mobile prototypes.',
     addedBy: 'Maya Patel',
@@ -1068,7 +1068,7 @@ const INITIAL_LINKS: ProjectLink[] = [
     id: 'lnk-2',
     projectId: 'prj-1',
     title: 'Staging Environment Preview',
-    url: 'https://staging.acme.novadesk.internal',
+    url: 'https://staging.acme.handlemydesk.internal',
     category: 'staging',
     description: 'Continuous deployment staging branch running the latest commits from main.',
     addedBy: 'Chloe Bennet',
@@ -1078,7 +1078,7 @@ const INITIAL_LINKS: ProjectLink[] = [
     id: 'lnk-3',
     projectId: 'prj-1',
     title: 'GitHub Enterprise Repository',
-    url: 'https://github.com/novadesk-internal/acme-web-platform',
+    url: 'https://github.com/handlemydesk-internal/acme-web-platform',
     category: 'repository',
     description: 'Main monorepo containing frontend application, CMS integrations, and end-to-end test suites.',
     addedBy: 'Chloe Bennet',
@@ -1320,7 +1320,7 @@ interface Migration {
   version: number;
   name: string;
   sql?: (sql: DatabaseSync) => void;
-  data?: (data: DatabaseSchema) => void;
+  data?: (data: DatabaseSchema, sql: DatabaseSync) => void;
 }
 
 const columnsOf = (sql: DatabaseSync, table: string) =>
@@ -1341,6 +1341,35 @@ const MIGRATIONS: Migration[] = [
     name: 'Projects: record a stage for projects created before stages existed',
     data: (data) => {
       for (const p of data.projects) if (!p.stage) p.stage = p.status === 'completed' ? 'delivered' : 'in_progress';
+    },
+  },
+  {
+    version: 3,
+    name: 'Rename the demo company from Novadesk to HandleMyDesk',
+    // Only the made-up demo domain, demo client and demo password change; real accounts are untouched
+    data: (data, sql) => {
+      const oldDomain = '@novadesk.internal';
+      const swap = (v: string) => v.replace(/novadesk/g, 'handlemydesk').replace(/Nova[Dd]esk/g, 'HandleMyDesk');
+      const demoUsers = data.users.filter((u) => u.email.toLowerCase().endsWith(oldDomain));
+      for (const u of demoUsers) u.email = u.email.replace(oldDomain, '@handlemydesk.internal');
+      for (const c of data.clients) {
+        if (c.email.endsWith(oldDomain) || /novadesk/i.test(c.name)) {
+          c.name = swap(c.name);
+          c.company = swap(c.company);
+          c.email = swap(c.email);
+          c.website = swap(c.website);
+        }
+      }
+      for (const p of data.projects) p.clientName = data.clients.find((c) => c.id === p.clientId)?.name ?? p.clientName;
+      for (const l of data.links) if (/novadesk/.test(l.url)) l.url = swap(l.url);
+
+      // Demo accounts still on the old demo password move to the new one
+      const get = sql.prepare('SELECT password_hash FROM credentials WHERE user_id = ?');
+      const set = sql.prepare('UPDATE credentials SET password_hash = ? WHERE user_id = ?');
+      for (const u of demoUsers) {
+        const row = get.get(u.id) as { password_hash: string } | undefined;
+        if (row && bcrypt.compareSync('novadesk123', row.password_hash)) set.run(getSeedPasswordHash(), u.id);
+      }
     },
   },
 ];
@@ -1388,7 +1417,7 @@ export class Database {
     for (const m of pending) m.sql?.(this.sql);
     this.load();
     if (pending.some((m) => m.data)) {
-      for (const m of pending) m.data?.(this.data);
+      for (const m of pending) m.data?.(this.data, this.sql);
       this.save();
     }
     const record = this.sql.prepare('INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)');
@@ -1574,7 +1603,7 @@ function acquireSingleInstanceLock() {
     }
     if (ownerAlive) {
       console.error(
-        `\nAnother NovaDesk server (process ${owner}) is already running on ${DATA_DIR}.\n` +
+        `\nAnother HandleMyDesk server (process ${owner}) is already running on ${DATA_DIR}.\n` +
           `Stop it first (close its terminal, or run: taskkill /PID ${owner} /T /F) and start again.\n`
       );
       process.exit(1);
@@ -1593,6 +1622,26 @@ function acquireSingleInstanceLock() {
   for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP'] as const) process.on(signal, () => process.exit(0));
 }
 
-if (!IS_TEST) acquireSingleInstanceLock();
+// The product was renamed: move the old database file (with its WAL journal) to the new name.
+// Safe here because this process holds the single-server lock, so nothing else has it open.
+function renameLegacyDatabase() {
+  if (!fs.existsSync(LEGACY_DB_PATH)) return;
+  if (fs.existsSync(DB_PATH)) {
+    console.warn(
+      `Both ${path.basename(DB_PATH)} and ${path.basename(LEGACY_DB_PATH)} exist in ${DATA_DIR}. Using ${path.basename(DB_PATH)}; ` +
+        `if your data is in ${path.basename(LEGACY_DB_PATH)}, stop the server, move ${path.basename(DB_PATH)} (and its -wal/-shm files) away and start again.`
+    );
+    return;
+  }
+  for (const suffix of ['', '-wal', '-shm']) {
+    if (fs.existsSync(LEGACY_DB_PATH + suffix)) fs.renameSync(LEGACY_DB_PATH + suffix, DB_PATH + suffix);
+  }
+  console.log(`Renamed ${path.basename(LEGACY_DB_PATH)} to ${path.basename(DB_PATH)}`);
+}
+
+if (!IS_TEST) {
+  acquireSingleInstanceLock();
+  renameLegacyDatabase();
+}
 
 export const db = new Database();

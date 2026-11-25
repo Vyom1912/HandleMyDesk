@@ -31,7 +31,7 @@ export const SetPasswordView: React.FC = () => {
       <div className="w-full max-w-[340px]">
         <div className="mb-8">
           <span className="w-8 h-8 rounded-md bg-fg text-canvas text-sm font-bold flex items-center justify-center mb-6" aria-hidden="true">
-            N
+            H
           </span>
           <h1 className="text-2xl font-semibold tracking-tight text-fg">Choose your password</h1>
           <p className="text-sm text-fg-muted mt-1">

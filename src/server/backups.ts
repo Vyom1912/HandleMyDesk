@@ -9,7 +9,8 @@ export interface BackupInfo {
   createdAt: string;
 }
 
-const NAME_PATTERN = /^novadesk-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}(-[a-z]+)?\.db$/;
+// Backups made before the rename start with "novadesk-"; they stay listed and restorable
+const NAME_PATTERN = /^(handlemydesk|novadesk)-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}(-[a-z]+)?\.db$/;
 
 export const isBackupName = (name: string) => NAME_PATTERN.test(name);
 
@@ -25,7 +26,7 @@ export function backupPath(name: string): string {
 export function createBackup(source: DatabaseSync, label?: string): BackupInfo {
   fs.mkdirSync(BACKUP_DIR, { recursive: true });
   const stamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-  const name = `novadesk-${stamp}${label ? `-${label}` : ''}.db`;
+  const name = `handlemydesk-${stamp}${label ? `-${label}` : ''}.db`;
   const target = path.join(BACKUP_DIR, name);
   // A backup from this same second already holds the same data
   if (!fs.existsSync(target)) source.exec(`VACUUM INTO '${target.replace(/'/g, "''")}'`);

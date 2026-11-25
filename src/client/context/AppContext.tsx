@@ -76,9 +76,9 @@ function tabToRoute(tabId: string): Route {
 type NotificationPage = { items: NotificationItem[]; hasMore: boolean; unreadCount: number };
 const NOTIFICATION_PAGE = 50;
 
-const SECTION_KEY = (userId: string, projectId: string) => `novadesk_section_${userId}_${projectId}`;
-const THEME_KEY = 'novadesk_theme';
-const SIDEBAR_KEY = 'novadesk_sidebar';
+const SECTION_KEY = (userId: string, projectId: string) => `handlemydesk_section_${userId}_${projectId}`;
+const THEME_KEY = 'handlemydesk_theme';
+const SIDEBAR_KEY = 'handlemydesk_sidebar';
 
 const store = {
   get(key: string): string | null {

@@ -2448,7 +2448,7 @@ if (process.env.NODE_ENV !== 'test') {
   setInterval(() => runReminders(), 3600 * 1000).unref();
 
   const server = app.listen(PORT, () => {
-    console.log(`NovaDesk server running on port ${PORT} (process ${process.pid})`);
+    console.log(`HandleMyDesk server running on port ${PORT} (process ${process.pid})`);
   });
   server.on('error', (err: NodeJS.ErrnoException) => {
     if (err.code === 'EADDRINUSE') {

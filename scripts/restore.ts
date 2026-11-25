@@ -4,7 +4,7 @@ import '../src/server/env';
 import fs from 'fs';
 import path from 'path';
 import { DatabaseSync } from 'node:sqlite';
-import { DB_PATH, LOCK_FILE, BACKUP_DIR } from '../src/server/paths';
+import { currentDbPath, LOCK_FILE, BACKUP_DIR } from '../src/server/paths';
 import { createBackup, listBackups, isBackupName } from '../src/server/backups';
 
 const name = process.argv[2];
@@ -31,10 +31,12 @@ if (fs.existsSync(LOCK_FILE)) {
     // Stale lock
   }
   if (running) {
-    console.error(`The NovaDesk server is running (process ${pid}). Stop it, then run the restore again.`);
+    console.error(`The HandleMyDesk server is running (process ${pid}). Stop it, then run the restore again.`);
     process.exit(1);
   }
 }
+
+const DB_PATH = currentDbPath();
 
 // Keep the current data, in case the restore was a mistake
 if (fs.existsSync(DB_PATH)) {

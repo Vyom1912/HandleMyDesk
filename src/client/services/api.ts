@@ -1,6 +1,6 @@
 import { AppEvent } from '../../types';
 
-export const STORAGE_TOKEN_KEY = 'novadesk_token';
+export const STORAGE_TOKEN_KEY = 'handlemydesk_token';
 
 /*
  * The session lives in sessionStorage, which belongs to a single browser tab. Every tab (and
@@ -32,7 +32,7 @@ export function setStoredToken(token: string | null): void {
 }
 
 // Fired when the server rejects our token, so the app can return to the sign-in screen
-export const UNAUTHORIZED_EVENT = 'novadesk-unauthorized';
+export const UNAUTHORIZED_EVENT = 'handlemydesk-unauthorized';
 
 function authHeaders(init?: HeadersInit): Headers {
   const headers = new Headers(init || {});

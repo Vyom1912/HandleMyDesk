@@ -176,7 +176,7 @@ const ReportBody: React.FC<{ options: Options }> = ({ options }) => {
         </section>
       )}
 
-      <footer className="pt-4 border-t border-line text-xs text-fg-faint">Prepared by {currentUser?.name} with NovaDesk</footer>
+      <footer className="pt-4 border-t border-line text-xs text-fg-faint">Prepared by {currentUser?.name} with HandleMyDesk</footer>
     </article>
   );
 };

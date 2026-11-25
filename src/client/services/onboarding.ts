@@ -1,8 +1,8 @@
 // Remembers which getting-started steps someone has tried, per person and per browser.
 export type OnboardingStep = 'search' | 'shortcuts' | 'notifications' | 'dismissed';
 
-const key = (userId: string) => `novadesk_onboarding_${userId}`;
-export const ONBOARDING_EVENT = 'novadesk:onboarding';
+const key = (userId: string) => `handlemydesk_onboarding_${userId}`;
+export const ONBOARDING_EVENT = 'handlemydesk:onboarding';
 
 export function readOnboarding(userId: string): Partial<Record<OnboardingStep, boolean>> {
   try {

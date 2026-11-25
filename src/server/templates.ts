@@ -51,7 +51,7 @@ export const BUILT_IN_TEMPLATES: ProjectTemplate[] = [
     ],
     tasks: [
       t('Send contract and statement of work', 1, 'high'),
-      t('Create client in NovaDesk and add contacts', 2, 'medium'),
+      t('Create client in HandleMyDesk and add contacts', 2, 'medium'),
       t('Request access to client systems', 5, 'medium', ['Accounts', 'Repositories', 'Analytics']),
       t('Kick-off meeting', 7, 'high', ['Agenda', 'Notes shared with the client']),
       t('Agree communication rhythm', 7, 'low'),
