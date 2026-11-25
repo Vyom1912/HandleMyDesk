@@ -66,7 +66,13 @@ export const ProjectDirectoryView: React.FC = () => {
       </div>
 
       {visible.length === 0 ? (
-        <div className="py-16 text-center text-sm text-fg-muted border border-dashed border-line-strong rounded-lg">No projects match these filters.</div>
+        <div className="py-16 px-6 text-center text-sm text-fg-muted border border-dashed border-line-strong rounded-lg">
+          {projects.length === 0
+            ? canCreate
+              ? 'No projects yet. Create the first one with New project.'
+              : "You're not on any project yet. When a project manager adds you to one, it appears here and in the sidebar."
+            : 'No projects match these filters.'}
+        </div>
       ) : (
         <div className="border border-line rounded-lg overflow-hidden">
           <div className="hidden lg:grid grid-cols-[28px_minmax(0,1fr)_150px_110px_160px_100px_90px] gap-3 px-3 h-8 items-center bg-subtle border-b border-line text-xs font-medium text-fg-faint">

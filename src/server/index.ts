@@ -40,6 +40,11 @@ import {
   NotificationItem,
   User,
   isSystemTab,
+  TaskComment,
+  SearchResults,
+  NotificationKind,
+  NOTIFICATION_KINDS,
+  PROJECT_STAGES,
 } from '../types';
 
 export const app = express();
@@ -201,14 +206,20 @@ function logActivity(projectId: string, user: User, action: string, type: Projec
   });
 }
 
+// actor is null for system messages (reminders). Returns how many notifications were created.
 function notify(
   userIds: Iterable<string>,
-  actor: User,
-  n: { title: string; message: string; type: NotificationItem['type']; project?: Project }
-) {
+  actor: User | null,
+  n: { title: string; message: string; type: NotificationItem['type']; kind: NotificationKind; project?: Project; taskId?: string }
+): number {
   const database = db.getData();
+  let created = 0;
   for (const userId of new Set(userIds)) {
-    if (userId === actor.id || !database.users.some((u) => u.id === userId)) continue;
+    if (actor && userId === actor.id) continue;
+    const recipient = database.users.find((u) => u.id === userId);
+    if (!recipient || recipient.active === false) continue;
+    // Respect the person's notification preferences
+    if (database.workspaces[userId]?.mutedNotificationKinds?.includes(n.kind)) continue;
     const notification: NotificationItem = {
       id: newId('notif'),
       userId,
@@ -217,12 +228,16 @@ function notify(
       projectId: n.project?.id,
       projectName: n.project?.name,
       type: n.type,
+      kind: n.kind,
+      taskId: n.taskId,
       read: false,
       timestamp: now(),
     };
     database.notifications.unshift(notification);
     emitToUsers([userId], { type: 'notification', notification });
+    created++;
   }
+  return created;
 }
 
 function recalcCompletion(projectId: string) {
@@ -384,6 +399,15 @@ function findEmployee(req: Request): User {
   return user;
 }
 
+// Renames someone and keeps their name current on projects and tasks
+function renameUser(user: User, name: string) {
+  const database = db.getData();
+  user.name = name;
+  user.initials = initialsOf(name);
+  for (const p of database.projects) if (p.leadId === user.id) p.leadName = name;
+  for (const t of database.tasks) if (t.assigneeId === user.id) t.assigneeName = name;
+}
+
 const activeAdmins = () => db.getData().users.filter((u) => u.role === 'admin' && u.active !== false);
 
 function revokeSessions(userId: string) {
@@ -449,10 +473,7 @@ app.put(
       throw new HttpError(400, 'Keep at least one administrator. Make someone else an admin first.');
     }
 
-    if (name) {
-      user.name = name;
-      user.initials = initialsOf(name);
-    }
+    if (name) renameUser(user, name);
     if (email) user.email = email;
     if (role) user.role = role;
     const title = text(body.title, 'Job title', 100);
@@ -463,12 +484,6 @@ app.put(
     if (phone !== undefined) user.phone = phone;
     const status = oneOf(body.status, USER_STATUSES, 'status');
     if (status) user.status = status;
-
-    // Keep names shown on projects and tasks current
-    if (name) {
-      for (const p of database.projects) if (p.leadId === user.id) p.leadName = name;
-      for (const t of database.tasks) if (t.assigneeId === user.id) t.assigneeName = name;
-    }
 
     db.save();
     res.json(user);
@@ -817,6 +832,7 @@ app.post(
       startDate: dateStr(body.startDate, 'Start date') ?? daysFromNow(0),
       targetDate: dateStr(body.targetDate, 'Target date') ?? daysFromNow(90),
       completionPercentage: 0,
+      stage: 'planning',
       category: text(body.category, 'Category', 100) || 'General Project',
       teamMemberIds: [...team],
       createdAt: now(),
@@ -826,6 +842,7 @@ app.post(
     database.projects.unshift(newProject);
     logActivity(newProject.id, user, `created new project "${newProject.name}"`, 'general');
     notify(newProject.teamMemberIds, user, {
+      kind: 'team',
       title: 'Added to New Project',
       message: `${user.name} added you to the new project "${newProject.name}".`,
       type: 'info',
@@ -855,6 +872,7 @@ app.put(
     const name = text(body.name, 'Project name', 200);
     const code = text(body.code, 'Project code', 20)?.toUpperCase();
     const status = oneOf(body.status, PROJECT_STATUSES, 'status');
+    const stage = oneOf(body.stage, PROJECT_STAGES, 'stage');
 
     if (name !== undefined && name === '') throw new HttpError(400, 'Project name is required');
     if (code && database.projects.some((p) => p.code === code && p.id !== project.id)) {
@@ -888,9 +906,25 @@ app.put(
       project.status = status;
       logActivity(project.id, user, `changed project status from ${oldStatus} to ${status}`, 'status');
       notify(projectMemberIds(project), user, {
+        kind: 'status',
         title: 'Project Status Changed',
         message: `${user.name} changed "${project.name}" from ${oldStatus.replace('_', ' ')} to ${status.replace('_', ' ')}.`,
         type: status === 'archived' || status === 'on_hold' ? 'warning' : 'info',
+        project,
+      });
+    }
+
+    // Projects from before stages existed have none; infer it the same way the app does
+    const currentStage = project.stage ?? (project.status === 'completed' ? 'delivered' : 'in_progress');
+    if (stage && stage !== currentStage) {
+      project.stage = stage;
+      const stageLabel = stage.replace('_', ' ');
+      logActivity(project.id, user, `moved the project to the ${stageLabel} stage`, 'status');
+      notify(projectMemberIds(project), user, {
+        title: 'Project stage changed',
+        message: `"${project.name}" moved to ${stageLabel}.`,
+        type: stage === 'delivered' ? 'success' : 'info',
+        kind: 'status',
         project,
       });
     }
@@ -936,6 +970,7 @@ app.delete(
     database.links = keep(database.links);
     database.activities = keep(database.activities);
     database.notifications = keep(database.notifications);
+    database.comments = keep(database.comments);
     removeProjectFromWorkspaces(project.id);
 
     fs.rmSync(path.join(UPLOADS_DIR, project.id), { recursive: true, force: true });
@@ -988,6 +1023,8 @@ app.post(
     database.tasks.unshift(newTask);
     logActivity(project.id, user, `created task "${newTask.title}"`, 'task');
     notify([assignee.id], user, {
+      kind: 'assignments',
+      taskId: newTask.id,
       title: 'New Task Assigned',
       message: `${user.name} assigned you "${newTask.title}".`,
       type: newTask.priority === 'urgent' ? 'alert' : 'info',
@@ -1025,6 +1062,8 @@ app.put(
       logActivity(project.id, user, `moved task "${task.title}" from ${oldStatus} to ${status}`, 'task');
       if (status === 'done') {
         notify([project.leadId], user, {
+          kind: 'task_completed',
+          taskId: task.id,
           title: 'Task Completed',
           message: `${user.name} completed "${task.title}".`,
           type: 'success',
@@ -1043,6 +1082,8 @@ app.put(
       task.assigneeAvatar = assignee.avatar;
       logActivity(project.id, user, `assigned task "${task.title}" to ${assignee.name}`, 'task');
       notify([assignee.id], user, {
+        kind: 'assignments',
+        taskId: task.id,
         title: 'Task Assigned to You',
         message: `${user.name} assigned you "${task.title}".`,
         type: 'info',
@@ -1075,6 +1116,7 @@ app.delete(
     if (!task) throw new HttpError(404, 'Task not found');
 
     database.tasks = database.tasks.filter((t) => t.id !== task.id);
+    database.comments = database.comments.filter((c) => c.taskId !== task.id);
     logActivity(project.id, user, `deleted task "${task.title}"`, 'task');
     recalcCompletion(project.id);
 
@@ -1161,6 +1203,7 @@ app.put(
       logActivity(project.id, user, `marked milestone "${milestone.title}" as ${status.replace('_', ' ')}`, 'milestone');
       if (status === 'completed') {
         notify(projectMemberIds(project), user, {
+          kind: 'status',
           title: 'Milestone Completed',
           message: `"${milestone.title}" in ${project.name} was completed.`,
           type: 'success',
@@ -1221,6 +1264,7 @@ app.post(
     db.getData().deliverables.push(newDeliverable);
     logActivity(project.id, user, `added deliverable "${newDeliverable.title}"`, 'general');
     notify([owner.id], user, {
+      kind: 'deliverables',
       title: 'Deliverable Assigned',
       message: `You own the deliverable "${newDeliverable.title}" in ${project.name}.`,
       type: 'info',
@@ -1269,6 +1313,7 @@ app.put(
       }
       logActivity(project.id, user, `set deliverable "${deliverable.title}" to ${status.replace('_', ' ')}`, 'general');
       notify([deliverable.ownerId], user, {
+        kind: 'deliverables',
         title: status === 'approved' ? 'Deliverable Approved' : 'Deliverable Status Changed',
         message: `"${deliverable.title}" is now ${status.replace('_', ' ')}.`,
         type: status === 'approved' ? 'success' : status === 'rejected' ? 'alert' : 'info',
@@ -1605,6 +1650,7 @@ app.post(
       project.teamMemberIds.push(targetEmployee.id);
       logActivity(project.id, user, `added ${targetEmployee.name} to project team`, 'member');
       notify([targetEmployee.id], user, {
+        kind: 'team',
         title: 'Added to Project Team',
         message: `${user.name} added you to "${project.name}".`,
         type: 'info',
@@ -1820,6 +1866,313 @@ app.get('/api/dashboard/stats', authMiddleware, (req: AuthenticatedRequest, res:
 });
 
 // ==========================================
+// TASK COMMENTS & @MENTIONS
+// ==========================================
+
+function findTask(req: Request): { project: Project; task: Task } {
+  const project = getProject(req);
+  const task = db.getData().tasks.find((t) => t.id === param(req, 'taskId') && t.projectId === project.id);
+  if (!task) throw new HttpError(404, 'Task not found');
+  return { project, task };
+}
+
+// Mentions are sent as ids by the client; keep only people on the project whose name still appears in the text
+function resolveMentions(project: Project, text: string, ids: unknown): string[] {
+  if (!Array.isArray(ids)) return [];
+  const members = projectMemberIds(project);
+  const users = db.getData().users;
+  return [...new Set(ids.map(String))].filter((id) => {
+    const u = users.find((x) => x.id === id);
+    return !!u && members.has(id) && text.includes(`@${u.name}`);
+  });
+}
+
+app.get('/api/projects/:id/tasks/:taskId/comments', authMiddleware, requireProjectAccess, route((req, res) => {
+  const { task } = findTask(req);
+  res.json(db.getData().comments.filter((c) => c.taskId === task.id).sort((a, b) => a.createdAt.localeCompare(b.createdAt)));
+}));
+
+app.post(
+  '/api/projects/:id/tasks/:taskId/comments',
+  authMiddleware,
+  requireProjectAccess,
+  route((req, res) => {
+    const user = req.user!;
+    const { project, task } = findTask(req);
+    const body = text(req.body?.text, 'Comment', 4000, true)!;
+    const mentions = resolveMentions(project, body, req.body?.mentions);
+
+    const comment: TaskComment = {
+      id: newId('cmt'),
+      taskId: task.id,
+      projectId: project.id,
+      authorId: user.id,
+      authorName: user.name,
+      authorAvatar: user.avatar,
+      text: body,
+      mentions,
+      createdAt: now(),
+    };
+    db.getData().comments.push(comment);
+
+    const preview = body.length > 120 ? `${body.slice(0, 117)}…` : body;
+    notify(mentions, user, {
+      title: 'You were mentioned',
+      message: `${user.name} on "${task.title}": ${preview}`,
+      type: 'info',
+      kind: 'mentions',
+      project,
+      taskId: task.id,
+    });
+    // The assignee hears about comments on their task (unless they were already mentioned)
+    if (!mentions.includes(task.assigneeId)) {
+      notify([task.assigneeId], user, {
+        title: 'New comment on your task',
+        message: `${user.name} on "${task.title}": ${preview}`,
+        type: 'info',
+        kind: 'comments',
+        project,
+        taskId: task.id,
+      });
+    }
+
+    db.save();
+    res.status(201).json(comment);
+  })
+);
+
+function findOwnedComment(req: AuthenticatedRequest): TaskComment {
+  const { project, task } = findTask(req);
+  const comment = db.getData().comments.find((c) => c.id === param(req, 'commentId') && c.taskId === task.id);
+  if (!comment) throw new HttpError(404, 'Comment not found');
+  const isAuthor = comment.authorId === req.user!.id;
+  if (!isAuthor && !(req.method === 'DELETE' && canManageProject(req.user!, project))) {
+    throw new HttpError(403, 'You can only change your own comments');
+  }
+  return comment;
+}
+
+app.put(
+  '/api/projects/:id/tasks/:taskId/comments/:commentId',
+  authMiddleware,
+  requireProjectAccess,
+  route((req, res) => {
+    const comment = findOwnedComment(req);
+    const project = getProject(req);
+    comment.text = text(req.body?.text, 'Comment', 4000, true)!;
+    comment.mentions = resolveMentions(project, comment.text, req.body?.mentions ?? comment.mentions);
+    comment.editedAt = now();
+    db.save();
+    res.json(comment);
+  })
+);
+
+app.delete(
+  '/api/projects/:id/tasks/:taskId/comments/:commentId',
+  authMiddleware,
+  requireProjectAccess,
+  route((req, res) => {
+    const comment = findOwnedComment(req);
+    const database = db.getData();
+    database.comments = database.comments.filter((c) => c.id !== comment.id);
+    db.save();
+    res.json({ message: 'Comment deleted' });
+  })
+);
+
+// ==========================================
+// SEARCH (everything the person can see)
+// ==========================================
+
+app.get('/api/search', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
+  const empty: SearchResults = { projects: [], tasks: [], notes: [], files: [], people: [] };
+  const q = String(req.query.q ?? '').trim().toLowerCase();
+  if (q.length < 2) {
+    res.json(empty);
+    return;
+  }
+  const database = db.getData();
+  const visible = database.projects.filter((p) => canUserViewProject(req.user!, p));
+  const ids = new Set(visible.map((p) => p.id));
+  const nameOf = (projectId: string) => visible.find((p) => p.id === projectId)?.name ?? '';
+  const has = (v?: string) => !!v && v.toLowerCase().includes(q);
+  const LIMIT = 8;
+
+  const snippet = (content: string) => {
+    const at = content.toLowerCase().indexOf(q);
+    if (at === -1) return content.slice(0, 90);
+    const start = Math.max(0, at - 30);
+    return `${start > 0 ? '…' : ''}${content.slice(start, at + q.length + 60).replace(/\s+/g, ' ')}…`;
+  };
+
+  const results: SearchResults = {
+    projects: visible
+      .filter((p) => has(p.name) || has(p.code) || has(p.clientName) || has(p.category))
+      .slice(0, LIMIT)
+      .map((p) => ({ id: p.id, name: p.name, code: p.code, clientName: p.clientName, status: p.status })),
+    tasks: database.tasks
+      .filter((t) => ids.has(t.projectId) && (has(t.title) || has(t.description) || t.tags.some(has)))
+      .slice(0, LIMIT)
+      .map((t) => ({ id: t.id, title: t.title, projectId: t.projectId, projectName: nameOf(t.projectId), status: t.status })),
+    notes: database.notes
+      .filter((n) => ids.has(n.projectId) && (has(n.title) || has(n.content)))
+      .slice(0, LIMIT)
+      .map((n) => ({ id: n.id, title: n.title, projectId: n.projectId, projectName: nameOf(n.projectId), snippet: has(n.title) ? n.content.slice(0, 90) : snippet(n.content) })),
+    files: database.files
+      .filter((f) => ids.has(f.projectId) && has(f.name))
+      .slice(0, LIMIT)
+      .map((f) => ({ id: f.id, name: f.name, projectId: f.projectId, projectName: nameOf(f.projectId) })),
+    people: database.users
+      .filter((u) => u.active !== false && (has(u.name) || has(u.title) || has(u.email)))
+      .slice(0, LIMIT)
+      .map((u) => ({ id: u.id, name: u.name, title: u.title, email: u.email, avatar: u.avatar })),
+  };
+  res.json(results);
+});
+
+// ==========================================
+// YOUR PROFILE & NOTIFICATION PREFERENCES
+// ==========================================
+
+app.put(
+  '/api/auth/me',
+  authMiddleware,
+  route((req, res) => {
+    const user = req.user!;
+    const body = req.body ?? {};
+    const name = text(body.name, 'Name', 100);
+    if (name !== undefined && !name) throw new HttpError(400, 'Name is required');
+    if (name) renameUser(user, name);
+    const title = text(body.title, 'Job title', 100);
+    if (title) user.title = title;
+    const phone = text(body.phone, 'Phone', 50);
+    if (phone !== undefined) user.phone = phone;
+    const status = oneOf(body.status, USER_STATUSES, 'status');
+    if (status) user.status = status;
+    db.save();
+    res.json(user);
+  })
+);
+
+// Profile photos are served without sign-in (an <img> can't send a token); the names are random
+export const AVATAR_DIR = path.join(UPLOADS_DIR, 'avatars');
+const AVATAR_TYPES: Record<string, string> = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/gif': '.gif' };
+const avatarUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => {
+      fs.mkdirSync(AVATAR_DIR, { recursive: true });
+      cb(null, AVATAR_DIR);
+    },
+    filename: (_req, file, cb) => cb(null, `${uuidv4()}${AVATAR_TYPES[file.mimetype] ?? '.img'}`),
+  }),
+  limits: { fileSize: 2 * 1024 * 1024, files: 1 },
+  fileFilter: (_req, file, cb) => cb(null, file.mimetype in AVATAR_TYPES),
+});
+
+const ownAvatarFile = (avatar: string) => (avatar.startsWith('/api/avatars/') ? path.join(AVATAR_DIR, path.basename(avatar)) : null);
+
+app.post(
+  '/api/auth/me/avatar',
+  authMiddleware,
+  avatarUpload.single('avatar'),
+  route((req, res) => {
+    const user = req.user!;
+    if (!req.file) throw new HttpError(400, 'Choose a JPG, PNG, WebP or GIF image up to 2 MB');
+    const previous = ownAvatarFile(user.avatar);
+    user.avatar = `/api/avatars/${req.file.filename}`;
+    db.save();
+    if (previous) fs.rmSync(previous, { force: true });
+    res.json(user);
+  })
+);
+
+app.delete(
+  '/api/auth/me/avatar',
+  authMiddleware,
+  route((req, res) => {
+    const user = req.user!;
+    const previous = ownAvatarFile(user.avatar);
+    user.avatar = '';
+    db.save();
+    if (previous) fs.rmSync(previous, { force: true });
+    res.json(user);
+  })
+);
+
+app.get('/api/avatars/:file', (req, res) => {
+  const file = param(req, 'file');
+  if (!/^[0-9a-f-]{36}\.(jpg|png|webp|gif)$/.test(file)) {
+    res.status(404).end();
+    return;
+  }
+  res.sendFile(path.join(AVATAR_DIR, file), { maxAge: '365d', immutable: true }, (err) => {
+    if (err && !res.headersSent) res.status(404).end();
+  });
+});
+
+const KINDS = NOTIFICATION_KINDS.map((k) => k.kind) as readonly NotificationKind[];
+
+app.get('/api/notification-preferences', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
+  res.json({ muted: ensureWorkspace(req.user!.id).mutedNotificationKinds ?? [] });
+});
+
+app.put(
+  '/api/notification-preferences',
+  authMiddleware,
+  route((req, res) => {
+    const muted = req.body?.muted;
+    if (!Array.isArray(muted)) throw new HttpError(400, 'muted must be a list');
+    const workspace = ensureWorkspace(req.user!.id);
+    workspace.mutedNotificationKinds = [...new Set(muted.filter((k: unknown): k is NotificationKind => KINDS.includes(k as NotificationKind)))];
+    db.save();
+    res.json({ muted: workspace.mutedNotificationKinds });
+  })
+);
+
+// ==========================================
+// REMINDERS (run hourly)
+// ==========================================
+
+// Sends each assignee one "due tomorrow" and one "overdue" reminder per task and due date
+export function runReminders(at = new Date()): number {
+  const database = db.getData();
+  const today = at.toISOString().split('T')[0];
+  const tomorrow = new Date(at.getTime() + 86400000).toISOString().split('T')[0];
+  let sent = 0;
+
+  for (const task of database.tasks) {
+    if (task.status === 'done' || !task.dueDate) continue;
+    const project = database.projects.find((p) => p.id === task.projectId);
+    if (!project || project.status === 'archived' || project.status === 'completed') continue;
+
+    if (task.dueDate === tomorrow && task.remindedDue !== task.dueDate) {
+      task.remindedDue = task.dueDate;
+      sent += notify([task.assigneeId], null, {
+        title: 'Due tomorrow',
+        message: `"${task.title}" is due tomorrow.`,
+        type: 'warning',
+        kind: 'reminders',
+        project,
+        taskId: task.id,
+      });
+    }
+    if (task.dueDate < today && task.remindedOverdue !== task.dueDate) {
+      task.remindedOverdue = task.dueDate;
+      sent += notify([task.assigneeId], null, {
+        title: 'Task overdue',
+        message: `"${task.title}" was due ${task.dueDate}.`,
+        type: 'alert',
+        kind: 'reminders',
+        project,
+        taskId: task.id,
+      });
+    }
+  }
+  db.save();
+  return sent;
+}
+
+// ==========================================
 // NOTIFICATIONS
 // ==========================================
 
@@ -1910,6 +2263,8 @@ if (process.env.NODE_ENV !== 'test') {
   }
   runDailyBackup();
   setInterval(runDailyBackup, 3600 * 1000).unref();
+  runReminders();
+  setInterval(() => runReminders(), 3600 * 1000).unref();
 
   const server = app.listen(PORT, () => {
     console.log(`NovaDesk server running on port ${PORT} (process ${process.pid})`);

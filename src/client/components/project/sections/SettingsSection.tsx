@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { Lock } from 'lucide-react';
-import { Project } from '../../../../types';
+import { Project, ProjectStage } from '../../../../types';
+import { stageOf } from './OverviewSection';
 import { api } from '../../../services/api';
 import { useApp } from '../../../context/AppContext';
 import { useProject } from '../ProjectContext';
 import { Button, Field, inputClass, selectClass, textareaClass } from '../../ui/Field';
 
 type Form = Pick<Project, 'name' | 'code' | 'description' | 'category' | 'status' | 'priority' | 'startDate' | 'targetDate'> & {
+  stage: ProjectStage;
   budget: string;
   spent: string;
 };
@@ -17,6 +19,7 @@ const toForm = (p: Project): Form => ({
   description: p.description,
   category: p.category,
   status: p.status,
+  stage: stageOf(p),
   priority: p.priority,
   startDate: p.startDate,
   targetDate: p.targetDate,
@@ -131,8 +134,16 @@ export const SettingsSection: React.FC = () => {
             </Field>
           </Row>
 
-          <Row title="Status" description="Where the project is in its lifecycle.">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <Row title="Status" description="Stage is where the work is; status says whether it's running.">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <Field label="Stage">
+                <select className={selectClass} value={form.stage} onChange={(e) => set({ stage: e.target.value as ProjectStage })}>
+                  <option value="planning">Planning</option>
+                  <option value="in_progress">In progress</option>
+                  <option value="review">Review</option>
+                  <option value="delivered">Delivered</option>
+                </select>
+              </Field>
               <Field label="Status">
                 <select className={selectClass} value={form.status} onChange={(e) => set({ status: e.target.value as Project['status'] })}>
                   <option value="active">Active</option>

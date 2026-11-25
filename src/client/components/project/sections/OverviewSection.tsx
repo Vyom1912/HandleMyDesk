@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { Pencil, Plus, ExternalLink } from 'lucide-react';
+import { Pencil, Plus, ExternalLink, Check } from 'lucide-react';
 import { useApp } from '../../../context/AppContext';
 import { useProject } from '../ProjectContext';
 import { api } from '../../../services/api';
-import { Project, Task, ProjectLink } from '../../../../types';
+import { Project, Task, ProjectLink, ProjectStage } from '../../../../types';
 import { Avatar, PriorityBadge, StatusBadge, Tag, formatDate, isOverdue, timeAgo } from '../../ui/Badges';
 import { Button, textareaClass } from '../../ui/Field';
 import { Markdown } from '../../ui/Markdown';
@@ -43,6 +43,67 @@ What this project delivers and for whom.
 
 ## Notes
 Anything the team should know: environments, access, contacts.`;
+
+const STAGES: Array<{ value: ProjectStage; label: string; hint: string }> = [
+  { value: 'planning', label: 'Planning', hint: 'Scope, plan and team' },
+  { value: 'in_progress', label: 'In progress', hint: 'The work is being done' },
+  { value: 'review', label: 'Review', hint: 'Internal or client review' },
+  { value: 'delivered', label: 'Delivered', hint: 'Handed over' },
+];
+
+// Projects created before stages existed have none: infer one from their status
+export const stageOf = (p: Project): ProjectStage => p.stage ?? (p.status === 'completed' ? 'delivered' : 'in_progress');
+
+/** Where the project is, as four steps. The lead (or an admin) clicks a step to move it. */
+const StageTracker: React.FC = () => {
+  const { projectId, project, setProject, canManage } = useProject();
+  const { showToast } = useApp();
+  const current = STAGES.findIndex((s) => s.value === stageOf(project));
+
+  const move = async (stage: ProjectStage) => {
+    if (!canManage || stage === stageOf(project)) return;
+    try {
+      setProject(await api.put<Project>(`/api/projects/${projectId}`, { stage }));
+    } catch (err: any) {
+      showToast(err.message || 'Could not change the stage', 'error');
+    }
+  };
+
+  return (
+    <section aria-label="Project stage">
+      <ol className="grid grid-cols-4 gap-1.5">
+        {STAGES.map((s, i) => {
+          const state = i < current ? 'done' : i === current ? 'current' : 'next';
+          return (
+            <li key={s.value}>
+              <button
+                onClick={() => move(s.value)}
+                disabled={!canManage}
+                aria-current={state === 'current' ? 'step' : undefined}
+                title={canManage && state !== 'current' ? `Move the project to ${s.label}` : s.hint}
+                className={`w-full text-left rounded-md px-2.5 py-2 border transition-colors disabled:cursor-default ${
+                  state === 'current'
+                    ? 'border-accent bg-accent-soft'
+                    : state === 'done'
+                      ? 'border-line bg-subtle enabled:hover:bg-hover'
+                      : 'border-dashed border-line-strong enabled:hover:bg-hover'
+                }`}
+              >
+                <span className={`block h-1 rounded-full mb-2 ${state === 'next' ? 'bg-hover' : 'bg-accent'}`} aria-hidden="true" />
+                <span className={`flex items-center gap-1.5 text-[13px] font-medium ${state === 'next' ? 'text-fg-muted' : 'text-fg'}`}>
+                  {state === 'done' && <Check size={13} className="text-accent-ink shrink-0" aria-label="Done:" />}
+                  <span className="truncate">{s.label}</span>
+                </span>
+                <span className="hidden md:block text-xs text-fg-faint truncate mt-0.5">{s.hint}</span>
+              </button>
+            </li>
+          );
+        })}
+      </ol>
+      {canManage && <p className="text-xs text-fg-faint mt-1.5">Click a step to move the project. The team is notified.</p>}
+    </section>
+  );
+};
 
 const AboutBlock: React.FC = () => {
   const { projectId, project, setProject, canManage } = useProject();
@@ -214,6 +275,7 @@ export const OverviewSection: React.FC = () => {
     <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_300px] gap-x-12 gap-y-8">
       {/* Main column */}
       <div className="space-y-10 min-w-0 order-2 lg:order-1">
+        <StageTracker />
         <AboutBlock />
 
         <section aria-labelledby="progress-heading">

@@ -99,7 +99,9 @@ export const api = {
  * Subscribes to the server's live event stream. Uses fetch rather than EventSource so the
  * token travels in a header instead of the URL. Reconnects with backoff; returns a stop function.
  */
-export function openEventStream(onEvent: (event: AppEvent) => void): () => void {
+export type ConnectionStatus = 'connected' | 'reconnecting';
+
+export function openEventStream(onEvent: (event: AppEvent) => void, onStatus?: (status: ConnectionStatus) => void): () => void {
   let stopped = false;
   let controller: AbortController | null = null;
   let retryDelay = 1000;
@@ -107,6 +109,13 @@ export function openEventStream(onEvent: (event: AppEvent) => void): () => void 
   const connect = async () => {
     while (!stopped) {
       controller = new AbortController();
+      // The server sends a keep-alive every 15 s. Silence for 40 s means the connection is dead
+      // even if it still looks open (proxies, sleeping laptops, changed Wi-Fi), so start over.
+      let lastData = Date.now();
+      const current = controller;
+      const watchdog = setInterval(() => {
+        if (Date.now() - lastData > 40000) current.abort();
+      }, 5000);
       try {
         const response = await fetch('/api/events', { headers: authHeaders(), signal: controller.signal });
         if (response.status === 401) {
@@ -115,11 +124,13 @@ export function openEventStream(onEvent: (event: AppEvent) => void): () => void 
         }
         if (!response.ok || !response.body) throw new Error('stream unavailable');
         retryDelay = 1000;
+        onStatus?.('connected');
 
         const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
         let buffer = '';
         while (!stopped) {
           const { value, done } = await reader.read();
+          lastData = Date.now();
           if (done) break;
           buffer += value;
           let sep: number;
@@ -143,7 +154,9 @@ export function openEventStream(onEvent: (event: AppEvent) => void): () => void 
       } catch {
         // Network drop or abort; fall through to retry
       }
+      clearInterval(watchdog);
       if (stopped) return;
+      onStatus?.('reconnecting');
       await new Promise((r) => setTimeout(r, retryDelay));
       retryDelay = Math.min(retryDelay * 2, 30000);
     }

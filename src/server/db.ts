@@ -19,6 +19,7 @@ import {
   ProjectActivity,
   UserWorkspace,
   NotificationItem,
+  TaskComment,
 } from '../types';
 
 export interface DatabaseSchema {
@@ -35,6 +36,7 @@ export interface DatabaseSchema {
   activities: ProjectActivity[];
   workspaces: Record<string, UserWorkspace>; // keyed by userId
   notifications: NotificationItem[];
+  comments: TaskComment[];
 }
 
 type CollectionKey = keyof DatabaseSchema;
@@ -53,6 +55,7 @@ const COLLECTIONS: CollectionKey[] = [
   'activities',
   'workspaces',
   'notifications',
+  'comments',
 ];
 
 export { DATA_DIR };
@@ -1233,6 +1236,7 @@ function freshSeed(): DatabaseSchema {
     activities: clone(INITIAL_ACTIVITIES),
     workspaces: clone(INITIAL_WORKSPACES),
     notifications: clone(INITIAL_NOTIFICATIONS),
+    comments: [],
   };
 }
 
@@ -1251,6 +1255,7 @@ function emptySchema(): DatabaseSchema {
     activities: [],
     workspaces: {},
     notifications: [],
+    comments: [],
   };
 }
 

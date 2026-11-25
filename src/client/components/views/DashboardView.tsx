@@ -6,6 +6,7 @@ import { DashboardStats, Task } from '../../../types';
 import { Avatar, PriorityBadge, StatusDot, formatDate, isOverdue } from '../ui/Badges';
 import { Button } from '../ui/Field';
 import { PageShell } from '../layout/PageShell';
+import { GettingStarted } from './GettingStarted';
 
 const SectionTitle: React.FC<{ children: React.ReactNode; action?: React.ReactNode }> = ({ children, action }) => (
   <div className="flex items-center justify-between mb-2">
@@ -58,6 +59,8 @@ export const DashboardView: React.FC = () => {
         </p>
       )}
 
+      <GettingStarted />
+
       {/* Key numbers */}
       <div className="grid grid-cols-2 lg:grid-cols-4 border border-line rounded-lg divide-x divide-line mb-10 overflow-hidden">
         {[
@@ -105,7 +108,7 @@ export const DashboardView: React.FC = () => {
                   const overdue = isOverdue(task.dueDate, false);
                   return (
                     <li key={task.id}>
-                      <button onClick={() => openProject(task.projectId, 'tasks')} className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-subtle">
+                      <button onClick={() => openProject(task.projectId, 'tasks', task.id)} className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-subtle">
                         <StatusDot status={task.status} />
                         <span className="flex-1 min-w-0">
                           <span className="block text-sm text-fg truncate">{task.title}</span>
@@ -131,7 +134,7 @@ export const DashboardView: React.FC = () => {
               <ul className="border border-line rounded-lg divide-y divide-line">
                 {stats?.urgentTasks.map((task) => (
                   <li key={task.id}>
-                    <button onClick={() => openProject(task.projectId, 'tasks')} className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-subtle">
+                    <button onClick={() => openProject(task.projectId, 'tasks', task.id)} className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-subtle">
                       <Avatar src={task.assigneeAvatar} name={task.assigneeName} size={20} />
                       <span className="flex-1 min-w-0">
                         <span className="block text-sm text-fg truncate">{task.title}</span>

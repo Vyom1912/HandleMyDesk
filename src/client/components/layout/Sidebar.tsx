@@ -26,6 +26,7 @@ import {
   Milestone,
   Link2,
   Shield,
+  Keyboard,
 } from 'lucide-react';
 import { useApp, PageView, ThemePreference } from '../../context/AppContext';
 import { Project, ProjectSection } from '../../../types';
@@ -85,6 +86,9 @@ export const Sidebar: React.FC = () => {
     theme,
     setTheme,
     logout,
+    updateProfile,
+    showToast,
+    setIsShortcutsOpen,
   } = useApp();
 
   const [expanded, setExpanded] = useState<string[]>(() => readExpanded(currentUser?.id ?? ''));
@@ -233,6 +237,28 @@ export const Sidebar: React.FC = () => {
             </div>
             <div className="h-px bg-line my-1" />
             <div className="px-2 pt-1 pb-1.5">
+              <div className="text-xs text-fg-faint mb-1.5">Status</div>
+              <div className="grid grid-cols-3 gap-1" role="group" aria-label="Your status">
+                {([
+                  ['active', 'Available', 'bg-tone-green-fg'],
+                  ['busy', 'Busy', 'bg-tone-red-fg'],
+                  ['away', 'Away', 'bg-tone-amber-fg'],
+                ] as const).map(([value, text, dot]) => (
+                  <button
+                    key={value}
+                    onClick={() => updateProfile({ status: value }).catch((err) => showToast(err.message, 'error'))}
+                    aria-pressed={currentUser?.status === value}
+                    className={`flex items-center justify-center gap-1.5 h-8 rounded-md text-xs border ${
+                      currentUser?.status === value ? 'border-accent text-accent-ink bg-accent-soft' : 'border-line text-fg-muted hover:bg-hover'
+                    }`}
+                  >
+                    <span className={`w-2 h-2 rounded-full ${dot}`} aria-hidden="true" />
+                    {text}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="px-2 pt-1 pb-1.5">
               <div className="text-xs text-fg-faint mb-1.5">Appearance</div>
               <div className="grid grid-cols-3 gap-1" role="group" aria-label="Theme">
                 {THEMES.map((t) => (
@@ -259,7 +285,18 @@ export const Sidebar: React.FC = () => {
               }}
               className={`${rowBase} ${rowIdle}`}
             >
-              <UserCircle2 size={15} /> Account & password
+              <UserCircle2 size={15} /> Profile & password
+            </button>
+            <button
+              role="menuitem"
+              onClick={() => {
+                setMenuOpen(false);
+                setIsShortcutsOpen(true);
+              }}
+              className={`${rowBase} ${rowIdle}`}
+            >
+              <Keyboard size={15} /> Keyboard shortcuts
+              <kbd className="ml-auto text-[11px] text-fg-faint font-sans">?</kbd>
             </button>
             <button role="menuitem" onClick={logout} className={`${rowBase} ${rowIdle}`}>
               <LogOut size={15} /> Sign out
@@ -322,7 +359,9 @@ export const Sidebar: React.FC = () => {
           )
         )}
         {openProjects.length === 0 ? (
-          <p className="px-2 py-1 text-[13px] text-fg-faint">No active projects</p>
+          <p className="px-2 py-1 text-[13px] text-fg-faint leading-snug">
+            {canCreate ? 'No active projects yet. Use + to create one.' : "You're not on any active project yet. When a project manager adds you, it appears here."}
+          </p>
         ) : (
           <ul className="space-y-px">
             {openProjects.map((p) => (

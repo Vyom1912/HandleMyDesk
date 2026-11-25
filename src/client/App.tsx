@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, RefreshCw, LogOut } from 'lucide-react';
 import { useApp } from './context/AppContext';
 import { Sidebar } from './components/layout/Sidebar';
@@ -18,6 +18,7 @@ import { NotificationsDrawer } from './components/modals/NotificationsDrawer';
 import { ConfirmDialog, ToastBanner } from './components/ui/Feedback';
 import { Button } from './components/ui/Field';
 import { useDialogBehavior } from './components/ui/Modal';
+import { useKeyboardShortcuts, ShortcutsModal } from './components/ui/Shortcuts';
 
 const Spinner: React.FC<{ label: string }> = ({ label }) => (
   <div className="flex-1 flex items-center justify-center" role="status">
@@ -42,26 +43,28 @@ const MobileSidebar: React.FC = () => {
   );
 };
 
+// Shown while the live connection is down; waits 2 s so brief blips don't flash
+const ConnectionNotice: React.FC = () => {
+  const { connection } = useApp();
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    if (connection === 'online') return setVisible(false);
+    const t = setTimeout(() => setVisible(true), 2000);
+    return () => clearTimeout(t);
+  }, [connection]);
+  if (!visible || connection === 'online') return null;
+  return (
+    <div role="status" className="fixed top-3 left-1/2 -translate-x-1/2 z-[60] flex items-center gap-2 h-8 px-3 rounded-full bg-fg text-canvas text-[13px] shadow-lg animate-fade-in">
+      <span className="w-2 h-2 rounded-full bg-tone-amber-bg animate-pulse" aria-hidden="true" />
+      {connection === 'offline' ? "You're offline. Changes can't be saved until the connection is back." : 'Reconnecting… live updates are paused.'}
+    </div>
+  );
+};
+
 export const App: React.FC = () => {
   const { authStatus, mustChangePassword, route, setIsProjectPickerOpen, sidebarCollapsed, setSidebarCollapsed, loading, error, retryLoad, logout } = useApp();
 
-  // Keyboard shortcuts
-  useEffect(() => {
-    if (authStatus !== 'signed_in') return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      const mod = e.ctrlKey || e.metaKey;
-      if (mod && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        setIsProjectPickerOpen(true);
-      }
-      if (mod && e.key === '\\') {
-        e.preventDefault();
-        setSidebarCollapsed(!sidebarCollapsed);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [authStatus, sidebarCollapsed, setIsProjectPickerOpen, setSidebarCollapsed]);
+  useKeyboardShortcuts();
 
   if (authStatus === 'signed_out') {
     return (
@@ -148,6 +151,8 @@ export const App: React.FC = () => {
       <CreateProjectModal />
       <AccountModal />
       <NotificationsDrawer />
+      <ShortcutsModal />
+      <ConnectionNotice />
       <ConfirmDialog />
       <ToastBanner />
     </div>

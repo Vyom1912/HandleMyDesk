@@ -1,15 +1,22 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, FolderKanban, Home, CheckSquare, Building2, Users, CornerDownLeft } from 'lucide-react';
+import { Search, FolderKanban, Home, CheckSquare, Building2, Users, CornerDownLeft, FileText, BookText, CircleCheck } from 'lucide-react';
 import { useApp, Route } from '../../context/AppContext';
 import { useDialogBehavior } from '../ui/Modal';
-import { StatusDot, label } from '../ui/Badges';
+import { Avatar, StatusDot, label } from '../ui/Badges';
+import { api } from '../../services/api';
+import { markOnboarding } from '../../services/onboarding';
+import { SearchResults } from '../../../types';
 
-type Result = { id: string; title: string; subtitle?: string; icon: React.ReactNode; go: () => void; group: 'Pages' | 'Projects' };
+// The notes section opens this note when it mounts (search results link to a specific note)
+export const OPEN_NOTE_KEY = 'novadesk_open_note';
+
+type Result = { id: string; title: string; subtitle?: string; icon: React.ReactNode; go: () => void; group: 'Projects' | 'Tasks' | 'Notes' | 'Files' | 'People' | 'Pages' };
 
 export const QuickProjectPickerModal: React.FC = () => {
-  const { isProjectPickerOpen, setIsProjectPickerOpen, projects, openProject, navigate, workspace } = useApp();
+  const { isProjectPickerOpen, setIsProjectPickerOpen, projects, openProject, navigate, workspace, currentUser } = useApp();
   const [search, setSearch] = useState('');
   const [highlight, setHighlight] = useState(0);
+  const [found, setFound] = useState<SearchResults | null>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
 
@@ -20,6 +27,26 @@ export const QuickProjectPickerModal: React.FC = () => {
   useDialogBehavior(isProjectPickerOpen, close, dialogRef);
 
   useEffect(() => setHighlight(0), [search]);
+  useEffect(() => {
+    if (isProjectPickerOpen) markOnboarding(currentUser?.id, 'search');
+  }, [isProjectPickerOpen, currentUser?.id]);
+
+  // Tasks, notes, files and people come from the server, a moment after typing stops
+  useEffect(() => {
+    const q = search.trim();
+    if (q.length < 2) return setFound(null);
+    let cancelled = false;
+    const t = setTimeout(() => {
+      api
+        .get<SearchResults>(`/api/search?q=${encodeURIComponent(q)}`)
+        .then((r) => !cancelled && setFound(r))
+        .catch(() => {});
+    }, 180);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [search]);
   useEffect(() => {
     listRef.current?.querySelector(`[data-index="${highlight}"]`)?.scrollIntoView({ block: 'nearest' });
   }, [highlight]);
@@ -53,6 +80,45 @@ export const QuickProjectPickerModal: React.FC = () => {
       icon: <StatusDot status={p.status} />,
       go: () => openProject(p.id),
       group: 'Projects' as const,
+    })),
+    ...(found?.tasks ?? []).map((t) => ({
+      id: t.id,
+      title: t.title,
+      subtitle: `${t.projectName} · ${label(t.status)}`,
+      icon: <CircleCheck size={15} className="text-fg-faint" />,
+      go: () => openProject(t.projectId, 'tasks', t.id),
+      group: 'Tasks' as const,
+    })),
+    ...(found?.notes ?? []).map((n) => ({
+      id: n.id,
+      title: n.title,
+      subtitle: `${n.projectName} · ${n.snippet}`,
+      icon: <BookText size={15} className="text-fg-faint" />,
+      go: () => {
+        try {
+          sessionStorage.setItem(OPEN_NOTE_KEY, n.id);
+        } catch {
+          // Storage unavailable: the notes page opens on its first note
+        }
+        openProject(n.projectId, 'notes');
+      },
+      group: 'Notes' as const,
+    })),
+    ...(found?.files ?? []).map((f) => ({
+      id: f.id,
+      title: f.name,
+      subtitle: f.projectName,
+      icon: <FileText size={15} className="text-fg-faint" />,
+      go: () => openProject(f.projectId, 'files'),
+      group: 'Files' as const,
+    })),
+    ...(found?.people ?? []).map((u) => ({
+      id: u.id,
+      title: u.name,
+      subtitle: `${u.title} · ${u.email}`,
+      icon: <Avatar src={u.avatar} name={u.name} size={18} />,
+      go: () => navigate({ view: 'team' }),
+      group: 'People' as const,
     })),
     ...pages
       .filter((p) => !q || p.title.toLowerCase().includes(q))
@@ -91,8 +157,8 @@ export const QuickProjectPickerModal: React.FC = () => {
             aria-expanded="true"
             aria-controls="search-results"
             aria-activedescendant={results[highlight] ? `search-${results[highlight].id}` : undefined}
-            aria-label="Search projects and pages"
-            placeholder="Search projects and pages…"
+            aria-label="Search projects, tasks, notes, files and people"
+            placeholder="Search projects, tasks, notes, files, people…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={handleKeyDown}

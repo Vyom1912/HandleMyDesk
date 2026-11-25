@@ -7,13 +7,24 @@ import { useProject } from '../ProjectContext';
 import { formatDateTime, label, timeAgo } from '../../ui/Badges';
 import { Button, IconButton, selectClass, textareaClass } from '../../ui/Field';
 import { Markdown } from '../../ui/Markdown';
+import { OPEN_NOTE_KEY } from '../../modals/QuickProjectPickerModal';
 
 const CATEGORIES: ProjectNote['category'][] = ['meeting', 'architecture', 'spec', 'feedback'];
 
 export const NotesSection: React.FC = () => {
   const { projectId, notes, setNotes, canManage, reload } = useProject();
   const { currentUser, confirm, showToast } = useApp();
-  const [selectedId, setSelectedId] = useState<string | null>(notes[0]?.id ?? null);
+  const [selectedId, setSelectedId] = useState<string | null>(() => {
+    // Opened from search: show that note
+    try {
+      const wanted = sessionStorage.getItem(OPEN_NOTE_KEY);
+      sessionStorage.removeItem(OPEN_NOTE_KEY);
+      if (wanted && notes.some((n) => n.id === wanted)) return wanted;
+    } catch {
+      // Storage unavailable
+    }
+    return notes[0]?.id ?? null;
+  });
   // null = viewing; 'new' = creating; otherwise the id being edited
   const [editing, setEditing] = useState<string | null>(null);
   const [title, setTitle] = useState('');

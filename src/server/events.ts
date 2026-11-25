@@ -29,7 +29,7 @@ export function closeStreamsFor(userId: string) {
   streams.delete(userId);
 }
 
-// Keep proxies from closing idle streams
+// Keep-alive every 15 s: stops proxies closing idle streams, and lets browsers notice a dead connection
 setInterval(() => {
   for (const set of streams.values()) for (const res of set) res.write(': ping\n\n');
-}, 25000).unref();
+}, 15000).unref();

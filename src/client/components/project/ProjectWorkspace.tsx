@@ -19,6 +19,8 @@ import { ProjectContext, ProjectContextValue, ProjectResource } from './ProjectC
 import { StatusBadge, PriorityBadge } from '../ui/Badges';
 import { TopBar } from '../layout/PageShell';
 import { TaskEditorModal } from './TaskEditorModal';
+import { TaskPanel } from './TaskPanel';
+import { NEW_TASK_EVENT } from '../ui/Shortcuts';
 import { OverviewSection } from './sections/OverviewSection';
 import { TasksSection } from './sections/TasksSection';
 import { KanbanSection } from './sections/KanbanSection';
@@ -64,6 +66,7 @@ const ENDPOINTS: Record<ProjectResource, string> = {
 export const ProjectWorkspace: React.FC<{ projectId: string }> = ({ projectId }) => {
   const { currentUser, route, openProject, navigate, showToast, subscribe, refreshProjects, favoriteIds, toggleFavorite } = useApp();
   const activeSection: ProjectSection = route.view === 'project' ? route.section : 'overview';
+  const openTaskId = route.view === 'project' ? route.taskId : undefined;
 
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
@@ -120,6 +123,11 @@ export const ProjectWorkspace: React.FC<{ projectId: string }> = ({ projectId })
   useEffect(
     () =>
       subscribe((event) => {
+        // Back after a dropped connection: anything may have changed
+        if (event.type === 'reconnected') {
+          reload().catch(() => {});
+          return;
+        }
         if (event.type !== 'project-updated' || event.projectId !== projectId || event.actorId === currentUser?.id) return;
         const map: Record<string, Array<ProjectResource | 'project'>> = {
           project: ['project', 'activity'],
@@ -134,6 +142,13 @@ export const ProjectWorkspace: React.FC<{ projectId: string }> = ({ projectId })
       }),
     [subscribe, projectId, currentUser?.id, reload]
   );
+
+  // Keyboard shortcut "n": new task in this project
+  useEffect(() => {
+    const onNewTask = () => setEditor({});
+    window.addEventListener(NEW_TASK_EVENT, onNewTask);
+    return () => window.removeEventListener(NEW_TASK_EVENT, onNewTask);
+  }, []);
 
   // Flush pending deletes if the project closes before the undo window ends
   useEffect(() => {
@@ -243,7 +258,8 @@ export const ProjectWorkspace: React.FC<{ projectId: string }> = ({ projectId })
     canManage: canManageProject(currentUser, project),
     updateTask,
     deleteTask,
-    openTaskEditor: (task, defaults) => setEditor({ task, defaults }),
+    // Existing tasks open in the side panel (with their own link); new ones in the create dialog
+    openTaskEditor: (task, defaults) => (task ? openProject(projectId, activeSection, task.id) : setEditor({ defaults })),
     goToSection: (section) => openProject(projectId, section),
   };
 
@@ -348,6 +364,7 @@ export const ProjectWorkspace: React.FC<{ projectId: string }> = ({ projectId })
         </div>
 
         <TaskEditorModal open={!!editor} task={editor?.task} defaults={editor?.defaults} onClose={() => setEditor(null)} />
+        {openTaskId && <TaskPanel key={openTaskId} taskId={openTaskId} onClose={() => openProject(projectId, activeSection)} />}
       </div>
     </ProjectContext.Provider>
   );

@@ -58,7 +58,12 @@ export interface Project {
   teamMemberIds: string[];
   createdAt: string;
   updatedAt: string;
+  // Where the work is: separate from status (active/on hold…), which says whether it's running
+  stage?: ProjectStage;
 }
+
+export const PROJECT_STAGES = ['planning', 'in_progress', 'review', 'delivered'] as const;
+export type ProjectStage = (typeof PROJECT_STAGES)[number];
 
 // Built-in (non-project) workspace views. Anything else in activeTabId is a project id.
 export const SYSTEM_TABS = ['dashboard', 'directory', 'tasks', 'clients', 'team', 'admin'] as const;
@@ -80,6 +85,8 @@ export interface UserWorkspace {
   tabs: WorkspaceTab[];
   activeTabId: string; // one of SYSTEM_TABS, or a specific projectId
   favoriteProjectIds?: string[];
+  // Notification kinds this person turned off
+  mutedNotificationKinds?: NotificationKind[];
   updatedAt: string;
 }
 
@@ -109,6 +116,8 @@ export interface Task {
   subtasks: TaskSubtask[];
   createdAt: string;
   updatedAt: string;
+  remindedDue?: string;
+  remindedOverdue?: string;
 }
 
 export type MilestoneStatus = 'pending' | 'in_progress' | 'completed' | 'overdue';
@@ -212,6 +221,43 @@ export interface NotificationItem {
   type: 'info' | 'success' | 'warning' | 'alert';
   read: boolean;
   timestamp: string;
+  kind?: NotificationKind;
+  // Opens straight to the task when set
+  taskId?: string;
+}
+
+export const NOTIFICATION_KINDS = [
+  { kind: 'assignments', label: 'Tasks assigned to me' },
+  { kind: 'mentions', label: 'Someone @mentions me' },
+  { kind: 'comments', label: 'Comments on my tasks' },
+  { kind: 'reminders', label: 'Due-tomorrow and overdue reminders' },
+  { kind: 'task_completed', label: 'Tasks completed on projects I lead' },
+  { kind: 'status', label: 'Project status, stage and milestone changes' },
+  { kind: 'deliverables', label: 'Deliverables I own' },
+  { kind: 'team', label: 'Being added to a project' },
+] as const;
+export type NotificationKind = (typeof NOTIFICATION_KINDS)[number]['kind'];
+
+export interface TaskComment {
+  id: string;
+  taskId: string;
+  projectId: string;
+  authorId: string;
+  authorName: string;
+  authorAvatar: string;
+  text: string;
+  // Ids of people @mentioned in the text
+  mentions: string[];
+  createdAt: string;
+  editedAt?: string;
+}
+
+export interface SearchResults {
+  projects: Array<{ id: string; name: string; code: string; clientName: string; status: string }>;
+  tasks: Array<{ id: string; title: string; projectId: string; projectName: string; status: string }>;
+  notes: Array<{ id: string; title: string; projectId: string; projectName: string; snippet: string }>;
+  files: Array<{ id: string; name: string; projectId: string; projectName: string }>;
+  people: Array<{ id: string; name: string; title: string; email: string; avatar: string }>;
 }
 
 export type ProjectSection =
@@ -248,7 +294,9 @@ export interface DashboardStats {
 export type AppEvent =
   | { type: 'notification'; notification: NotificationItem }
   | { type: 'project-updated'; projectId: string; resource: string; actorId: string }
-  | { type: 'project-deleted'; projectId: string; actorId: string };
+  | { type: 'project-deleted'; projectId: string; actorId: string }
+  // Client-only: the live connection came back after a drop, so data may be stale
+  | { type: 'reconnected' };
 
 export interface BackupInfo {
   name: string;

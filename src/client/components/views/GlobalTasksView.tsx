@@ -115,7 +115,7 @@ export const GlobalTasksView: React.FC = () => {
                     >
                       {task.status === 'done' && <Check size={11} strokeWidth={3} />}
                     </button>
-                    <button onClick={() => openProject(task.projectId, 'tasks')} className="flex-1 min-w-0 text-left">
+                    <button onClick={() => openProject(task.projectId, 'tasks', task.id)} className="flex-1 min-w-0 text-left">
                       <span className={`block text-sm truncate ${task.status === 'done' ? 'line-through text-fg-faint' : 'text-fg'}`}>{task.title}</span>
                       <span className="block text-xs text-fg-faint truncate">
                         {task.projectName}

@@ -21,7 +21,7 @@ export interface ConfirmOptions {
 
 export type ThemePreference = 'light' | 'dark' | 'system';
 export type PageView = 'home' | 'tasks' | 'projects' | 'clients' | 'team' | 'admin';
-export type Route = { view: PageView } | { view: 'project'; projectId: string; section: ProjectSection };
+export type Route = { view: PageView } | { view: 'project'; projectId: string; section: ProjectSection; taskId?: string };
 
 export const PROJECT_SECTIONS: ProjectSection[] = [
   'overview',
@@ -45,7 +45,10 @@ const PAGE_PATHS: Record<PageView, string> = { home: '', tasks: 'tasks', project
 const PAGE_TO_TAB: Record<PageView, string> = { home: 'dashboard', tasks: 'tasks', projects: 'directory', clients: 'clients', team: 'team', admin: 'admin' };
 
 export function routeToHash(route: Route): string {
-  if (route.view === 'project') return `#/p/${route.projectId}${route.section === 'overview' ? '' : `/${route.section}`}`;
+  if (route.view === 'project') {
+    if (route.taskId) return `#/p/${route.projectId}/${route.section}/${route.taskId}`;
+    return `#/p/${route.projectId}${route.section === 'overview' ? '' : `/${route.section}`}`;
+  }
   return `#/${PAGE_PATHS[route.view]}`;
 }
 
@@ -53,7 +56,8 @@ function parseHash(hash: string): Route {
   const parts = hash.replace(/^#\/?/, '').split('/').filter(Boolean);
   if (parts[0] === 'p' && parts[1]) {
     const section = PROJECT_SECTIONS.includes(parts[2] as ProjectSection) ? (parts[2] as ProjectSection) : 'overview';
-    return { view: 'project', projectId: decodeURIComponent(parts[1]), section };
+    const taskId = parts[3] ? decodeURIComponent(parts[3]) : undefined;
+    return { view: 'project', projectId: decodeURIComponent(parts[1]), section, taskId };
   }
   const page = (Object.keys(PAGE_PATHS) as PageView[]).find((p) => PAGE_PATHS[p] === (parts[0] ?? ''));
   return { view: page ?? 'home' };
@@ -118,7 +122,14 @@ interface AppContextType {
   // Navigation
   route: Route;
   navigate: (route: Route) => void;
-  openProject: (projectId: string, section?: ProjectSection) => void;
+  openProject: (projectId: string, section?: ProjectSection, taskId?: string) => void;
+  // Live connection to the server: 'reconnecting' while it's down, 'offline' without a network
+  connection: 'online' | 'reconnecting' | 'offline';
+  updateProfile: (patch: Partial<Pick<User, 'name' | 'title' | 'phone' | 'status'>>) => Promise<void>;
+  uploadAvatar: (file: File) => Promise<void>;
+  removeAvatar: () => Promise<void>;
+  isShortcutsOpen: boolean;
+  setIsShortcutsOpen: (open: boolean) => void;
   // Appearance
   theme: ThemePreference;
   setTheme: (t: ThemePreference) => void;
@@ -179,6 +190,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isCreateProjectOpen, setIsCreateProjectOpen] = useState(false);
   const [isAccountOpen, setIsAccountOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [isShortcutsOpen, setIsShortcutsOpen] = useState(false);
+  const [connection, setConnection] = useState<'online' | 'reconnecting' | 'offline'>(navigator.onLine ? 'online' : 'offline');
 
   // ---------- Feedback ----------
   const dismissToast = useCallback(() => {
@@ -333,10 +346,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   const openProject = useCallback(
-    (projectId: string, section?: ProjectSection) => {
+    (projectId: string, section?: ProjectSection, taskId?: string) => {
       const remembered = store.get(SECTION_KEY(currentUserIdRef.current, projectId)) as ProjectSection | null;
-      const target = section ?? (remembered && PROJECT_SECTIONS.includes(remembered) ? remembered : 'overview');
-      navigate({ view: 'project', projectId, section: target });
+      const target = section ?? (taskId ? 'tasks' : remembered && PROJECT_SECTIONS.includes(remembered) ? remembered : 'overview');
+      navigate({ view: 'project', projectId, section: target, taskId });
     },
     [navigate]
   );
@@ -395,6 +408,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     if (authStatus !== 'signed_in' || !currentUser || mustChangePassword) return;
     const userId = currentUser.id;
+    let dropped = false;
+    const onStatus = (status: 'connected' | 'reconnecting') => {
+      if (status === 'reconnecting') {
+        dropped = true;
+        setConnection(navigator.onLine ? 'reconnecting' : 'offline');
+        return;
+      }
+      setConnection('online');
+      if (dropped) {
+        // Anything could have changed while we were away: refresh what's on screen
+        dropped = false;
+        refreshProjects();
+        refreshWorkspace();
+        api.get<NotificationItem[]>('/api/notifications').then(setNotifications).catch(() => {});
+        listeners.current.forEach((l) => l({ type: 'reconnected' }));
+      }
+    };
     return openEventStream((event) => {
       if (event.type === 'notification') {
         setNotifications((prev) => [event.notification, ...prev.filter((n) => n.id !== event.notification.id)]);
@@ -414,8 +444,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         refreshProjects();
       }
       listeners.current.forEach((l) => l(event));
-    });
+    }, onStatus);
   }, [authStatus, currentUser?.id, mustChangePassword, refreshProjects, refreshWorkspace, navigate, showToast]);
+
+  useEffect(() => {
+    const goOffline = () => setConnection('offline');
+    const goOnline = () => setConnection((c) => (c === 'offline' ? 'reconnecting' : c));
+    window.addEventListener('offline', goOffline);
+    window.addEventListener('online', goOnline);
+    return () => {
+      window.removeEventListener('offline', goOffline);
+      window.removeEventListener('online', goOnline);
+    };
+  }, []);
+
+  // ---------- Your profile ----------
+  const applyUser = (user: User) => {
+    setCurrentUser(user);
+    setAllEmployees((list) => list.map((u) => (u.id === user.id ? user : u)));
+  };
+
+  const updateProfile = async (patch: Partial<Pick<User, 'name' | 'title' | 'phone' | 'status'>>) => {
+    applyUser(await api.put<User>('/api/auth/me', patch));
+  };
+
+  const uploadAvatar = async (file: File) => {
+    const form = new FormData();
+    form.append('avatar', file);
+    applyUser(await api.upload<User>('/api/auth/me/avatar', form));
+  };
+
+  const removeAvatar = async () => {
+    applyUser(await api.delete<User>('/api/auth/me/avatar'));
+  };
 
   const subscribe = useCallback((listener: (event: AppEvent) => void) => {
     listeners.current.add(listener);
@@ -486,6 +547,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isAccountOpen,
         setIsAccountOpen,
         isNotificationsOpen,
+        isShortcutsOpen,
+        setIsShortcutsOpen,
+        connection,
+        updateProfile,
+        uploadAvatar,
+        removeAvatar,
         setIsNotificationsOpen,
         toast,
         showToast,
