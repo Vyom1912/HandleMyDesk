@@ -1,0 +1,1926 @@
+import './env';
+import express, { Request, Response, NextFunction } from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
+import bcrypt from 'bcryptjs';
+import multer from 'multer';
+import { v4 as uuidv4 } from 'uuid';
+import { db, UPLOADS_DIR, initialsOf } from './db';
+import { BACKUP_DIR, BACKUP_KEEP } from './paths';
+import { listBackups, isBackupName, backupPath } from './backups';
+import {
+  authMiddleware,
+  requireRole,
+  requireProjectAccess,
+  requireProjectManager,
+  canUserAccessProject,
+  canUserViewProject,
+  canManageProject,
+  generateToken,
+  AuthenticatedRequest,
+} from './auth';
+import { addStream, removeStream, emitToUsers, closeStreamsFor } from './events';
+import {
+  Project,
+  Task,
+  TaskSubtask,
+  ProjectMilestone,
+  ProjectDeliverable,
+  ProjectChatMessage,
+  ProjectFile,
+  ProjectNote,
+  ProjectLink,
+  ProjectActivity,
+  UserWorkspace,
+  WorkspaceTab,
+  Client,
+  NotificationItem,
+  User,
+  isSystemTab,
+} from '../types';
+
+export const app = express();
+const PORT = process.env.PORT || 3001;
+const IS_PROD = process.env.NODE_ENV === 'production';
+// HTTPS=true once the app is served over https (e.g. behind Caddy); turns on HSTS and https-only upgrades
+const HTTPS = process.env.HTTPS === 'true';
+
+// Behind a reverse proxy, trust its X-Forwarded-* headers so client IPs and protocol are correct
+if (process.env.TRUST_PROXY === 'true') app.set('trust proxy', 1);
+
+// Security headers. The content security policy only allows the app's own scripts, which
+// blocks injected scripts even if some text ever slipped through unescaped.
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        // React sets inline style attributes (progress bars etc.)
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", 'data:', 'blob:', 'https:'],
+        connectSrc: ["'self'"],
+        fontSrc: ["'self'", 'data:'],
+        objectSrc: ["'none'"],
+        frameAncestors: ["'none'"],
+        baseUri: ["'self'"],
+        formAction: ["'self'"],
+        upgradeInsecureRequests: HTTPS ? [] : null,
+      },
+    },
+    hsts: HTTPS ? { maxAge: 15552000 } : false,
+    crossOriginEmbedderPolicy: false,
+  })
+);
+
+// The Vite dev server proxies /api, so cross-origin access is only needed when explicitly configured
+if (process.env.CORS_ORIGIN) {
+  app.use(cors({ origin: process.env.CORS_ORIGIN.split(',') }));
+}
+app.use(express.json({ limit: '1mb' }));
+
+// Log incoming requests in dev
+app.use((req, res, next) => {
+  if (process.env.NODE_ENV !== 'test') {
+    console.log(`[${req.method}] ${req.url}`);
+  }
+  next();
+});
+
+// ==========================================
+// HELPERS & VALIDATION
+// ==========================================
+
+const TASK_STATUSES = ['backlog', 'todo', 'in_progress', 'in_review', 'done'] as const;
+const PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const;
+const PROJECT_STATUSES = ['active', 'on_hold', 'completed', 'archived'] as const;
+const MILESTONE_STATUSES = ['pending', 'in_progress', 'completed', 'overdue'] as const;
+const DELIVERABLE_STATUSES = ['pending', 'in_review', 'approved', 'rejected'] as const;
+const CLIENT_STATUSES = ['active', 'prospect', 'inactive'] as const;
+const FILE_CATEGORIES = ['contracts', 'assets', 'deliverables', 'specs', 'general'] as const;
+const NOTE_CATEGORIES = ['meeting', 'architecture', 'spec', 'feedback'] as const;
+const LINK_CATEGORIES = ['repository', 'live', 'domain', 'staging', 'design', 'docs', 'other'] as const;
+
+class HttpError extends Error {
+  constructor(public status: number, message: string) {
+    super(message);
+  }
+}
+
+const param = (req: Request, name: string) => String(req.params[name]);
+const now = () => new Date().toISOString();
+const newId = (prefix: string) => `${prefix}-${uuidv4().substring(0, 8)}`;
+const daysFromNow = (days: number) => new Date(Date.now() + days * 86400000).toISOString().split('T')[0];
+
+function oneOf<T extends string>(value: unknown, allowed: readonly T[], field: string): T | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  if (!allowed.includes(value as T)) throw new HttpError(400, `Invalid ${field}: must be one of ${allowed.join(', ')}`);
+  return value as T;
+}
+
+function text(value: unknown, field: string, max: number, required = false): string | undefined {
+  if (value === undefined || value === null) {
+    if (required) throw new HttpError(400, `${field} is required`);
+    return undefined;
+  }
+  if (typeof value !== 'string') throw new HttpError(400, `${field} must be text`);
+  const trimmed = value.trim();
+  if (required && trimmed === '') throw new HttpError(400, `${field} is required`);
+  if (trimmed.length > max) throw new HttpError(400, `${field} must be at most ${max} characters`);
+  return trimmed;
+}
+
+function dateStr(value: unknown, field: string): string | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value) || isNaN(Date.parse(value))) {
+    throw new HttpError(400, `${field} must be a date (YYYY-MM-DD)`);
+  }
+  return value;
+}
+
+function amount(value: unknown, field: string): number | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) throw new HttpError(400, `${field} must be a non-negative number`);
+  return n;
+}
+
+function httpUrl(value: unknown, field: string, required = false): string | undefined {
+  const s = text(value, field, 2048, required);
+  if (!s) return s;
+  let parsed: URL;
+  try {
+    parsed = new URL(s);
+  } catch {
+    throw new HttpError(400, `${field} must be a valid URL`);
+  }
+  // Blocks javascript:, data: and similar schemes that would run when the link is clicked
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new HttpError(400, `${field} must start with http:// or https://`);
+  }
+  return s;
+}
+
+// Wraps a handler so thrown HttpErrors become JSON responses
+type Handler = (req: AuthenticatedRequest, res: Response) => void | Promise<void>;
+const route =
+  (fn: Handler) =>
+  (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
+    Promise.resolve(fn(req, res)).catch(next);
+  };
+
+function getProject(req: Request): Project {
+  const project = db.getData().projects.find((p) => p.id === param(req, 'id'));
+  if (!project) throw new HttpError(404, 'Project not found');
+  return project;
+}
+
+function projectMemberIds(project: Project): Set<string> {
+  return new Set([project.leadId, ...project.teamMemberIds]);
+}
+
+// Everyone who can see the project: its team plus every admin
+function projectAudience(project: Project): string[] {
+  const database = db.getData();
+  return database.users.filter((u) => canUserViewProject(u, project)).map((u) => u.id);
+}
+
+function logActivity(projectId: string, user: User, action: string, type: ProjectActivity['type']) {
+  db.getData().activities.unshift({
+    id: newId('act'),
+    projectId,
+    userId: user.id,
+    userName: user.name,
+    userAvatar: user.avatar,
+    action,
+    timestamp: now(),
+    type,
+  });
+}
+
+function notify(
+  userIds: Iterable<string>,
+  actor: User,
+  n: { title: string; message: string; type: NotificationItem['type']; project?: Project }
+) {
+  const database = db.getData();
+  for (const userId of new Set(userIds)) {
+    if (userId === actor.id || !database.users.some((u) => u.id === userId)) continue;
+    const notification: NotificationItem = {
+      id: newId('notif'),
+      userId,
+      title: n.title,
+      message: n.message,
+      projectId: n.project?.id,
+      projectName: n.project?.name,
+      type: n.type,
+      read: false,
+      timestamp: now(),
+    };
+    database.notifications.unshift(notification);
+    emitToUsers([userId], { type: 'notification', notification });
+  }
+}
+
+function recalcCompletion(projectId: string) {
+  const database = db.getData();
+  const project = database.projects.find((p) => p.id === projectId);
+  if (!project) return;
+  const projectTasks = database.tasks.filter((t) => t.projectId === projectId);
+  project.completionPercentage =
+    projectTasks.length === 0
+      ? 0
+      : Math.round((projectTasks.filter((t) => t.status === 'done').length / projectTasks.length) * 100);
+}
+
+function removeProjectFromWorkspaces(projectId: string, userIds?: string[]) {
+  const database = db.getData();
+  for (const ws of Object.values(database.workspaces)) {
+    if (userIds && !userIds.includes(ws.userId)) continue;
+    const tabIdx = ws.tabs.findIndex((t) => t.projectId === projectId);
+    if (tabIdx === -1) continue;
+    ws.tabs.splice(tabIdx, 1);
+    ws.tabs.forEach((t, i) => (t.tabOrder = i));
+    if (ws.activeTabId === projectId) {
+      ws.activeTabId = ws.tabs.length > 0 ? ws.tabs[Math.max(0, tabIdx - 1)].projectId : 'dashboard';
+    }
+  }
+}
+
+function sanitizeSubtasks(value: unknown): TaskSubtask[] {
+  if (!Array.isArray(value)) throw new HttpError(400, 'subtasks must be a list');
+  return value.slice(0, 100).map((s) => ({
+    id: typeof s?.id === 'string' && s.id ? s.id : newId('sub'),
+    title: text(s?.title, 'Subtask title', 300, true)!,
+    completed: Boolean(s?.completed),
+  }));
+}
+
+function sanitizeTags(value: unknown): string[] {
+  if (!Array.isArray(value)) throw new HttpError(400, 'tags must be a list');
+  return [...new Set(value.map((t) => text(t, 'Tag', 40)).filter((t): t is string => !!t))].slice(0, 20);
+}
+
+function resolveAssignee(project: Project, assigneeId: unknown): User {
+  const database = db.getData();
+  const id = String(assigneeId);
+  if (!projectMemberIds(project).has(id)) {
+    throw new HttpError(400, 'Tasks can only be assigned to members of this project team');
+  }
+  const assignee = database.users.find((u) => u.id === id);
+  if (!assignee) throw new HttpError(400, 'Assignee not found');
+  return assignee;
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+// After every successful write to a project's sub-resources, tell everyone viewing that project
+// so open workspaces refresh live. The audience is captured up front because a DELETE may remove the project.
+app.use('/api/projects/:id', (req: AuthenticatedRequest, res, next) => {
+  if (req.method === 'GET') return next();
+  const project = db.getData().projects.find((p) => p.id === req.params.id);
+  if (!project) return next();
+  const audience = projectAudience(project);
+  const resource = req.path.split('/')[1] || 'project';
+  res.on('finish', () => {
+    if (res.statusCode >= 300 || !req.user) return;
+    const projectGone = !db.getData().projects.some((p) => p.id === project.id);
+    emitToUsers(
+      audience,
+      projectGone
+        ? { type: 'project-deleted', projectId: project.id, actorId: req.user.id }
+        : { type: 'project-updated', projectId: project.id, resource, actorId: req.user.id }
+    );
+  });
+  next();
+});
+
+// Lets people (and the dev tooling) confirm which server process is answering
+app.get('/api/health', (req, res) => {
+  res.json({ ok: true, pid: process.pid, uptimeSeconds: Math.round(process.uptime()) });
+});
+
+// ==========================================
+// AUTH & EMPLOYEE ENDPOINTS
+// ==========================================
+
+app.post(
+  '/api/auth/login',
+  route(async (req, res) => {
+    const email = text(req.body?.email, 'Email', 200, true)!.toLowerCase();
+    const password = typeof req.body?.password === 'string' ? req.body.password : '';
+    const user = db.getData().users.find((u) => u.email.toLowerCase() === email);
+    const hash = user ? db.getPasswordHash(user.id) : null;
+    const valid = !!hash && (await bcrypt.compare(password, hash));
+
+    if (!user || !valid) throw new HttpError(401, 'Incorrect email or password');
+    if (user.active === false) throw new HttpError(403, 'This account has been deactivated. Ask an administrator.');
+
+    res.json({ user, token: generateToken(user), mustChangePassword: db.getAuthState(user.id).mustChange });
+  })
+);
+
+app.get('/api/auth/me', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
+  res.json({ user: req.user, mustChangePassword: db.getAuthState(req.user!.id).mustChange });
+});
+
+// Changing your password signs out every other session; this one gets a fresh token
+app.post(
+  '/api/auth/password',
+  authMiddleware,
+  route(async (req, res) => {
+    const user = req.user!;
+    const { currentPassword, newPassword } = req.body ?? {};
+    if (typeof newPassword !== 'string' || newPassword.length < 8) {
+      throw new HttpError(400, 'New password must be at least 8 characters');
+    }
+    const hash = db.getPasswordHash(user.id);
+    if (!hash || typeof currentPassword !== 'string' || !(await bcrypt.compare(currentPassword, hash))) {
+      throw new HttpError(400, 'Current password is incorrect');
+    }
+    if (currentPassword === newPassword) throw new HttpError(400, 'Choose a password different from the current one');
+    db.setPasswordHash(user.id, await bcrypt.hash(newPassword, 10));
+    db.bumpSessionVersion(user.id);
+    closeStreamsFor(user.id);
+    res.json({ success: true, token: generateToken(user) });
+  })
+);
+
+app.post('/api/auth/logout-all', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
+  db.bumpSessionVersion(req.user!.id);
+  closeStreamsFor(req.user!.id);
+  res.json({ success: true });
+});
+
+app.get('/api/employees', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
+  res.json(db.getData().users);
+});
+
+// ==========================================
+// PEOPLE ADMINISTRATION (admins only)
+// ==========================================
+
+const ROLES = ['admin', 'pm', 'member'] as const;
+const USER_STATUSES = ['active', 'away', 'busy'] as const;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Easy to read aloud or type: no 0/O or 1/l
+function temporaryPassword(): string {
+  const alphabet = 'abcdefghjkmnpqrstuvwxyz23456789';
+  const chars = Array.from(crypto.randomBytes(12), (b) => alphabet[b % alphabet.length]);
+  return `${chars.slice(0, 4).join('')}-${chars.slice(4, 8).join('')}-${chars.slice(8).join('')}`;
+}
+
+function findEmployee(req: Request): User {
+  const user = db.getData().users.find((u) => u.id === param(req, 'id'));
+  if (!user) throw new HttpError(404, 'Person not found');
+  return user;
+}
+
+const activeAdmins = () => db.getData().users.filter((u) => u.role === 'admin' && u.active !== false);
+
+function revokeSessions(userId: string) {
+  db.bumpSessionVersion(userId);
+  closeStreamsFor(userId);
+}
+
+app.post(
+  '/api/employees',
+  authMiddleware,
+  requireRole(['admin']),
+  route(async (req, res) => {
+    const database = db.getData();
+    const body = req.body ?? {};
+    const name = text(body.name, 'Name', 100, true)!;
+    const email = text(body.email, 'Email', 200, true)!.toLowerCase();
+    if (!EMAIL_PATTERN.test(email)) throw new HttpError(400, 'Enter a valid email');
+    if (database.users.some((u) => u.email.toLowerCase() === email)) throw new HttpError(400, 'Someone already uses that email');
+
+    const user: User = {
+      id: newId('emp'),
+      name,
+      email,
+      avatar: '',
+      role: oneOf(body.role, ROLES, 'role') ?? 'member',
+      title: text(body.title, 'Job title', 100) || 'Team member',
+      department: text(body.department, 'Department', 100) || 'General',
+      status: 'active',
+      phone: text(body.phone, 'Phone', 50) ?? '',
+      initials: initialsOf(name),
+      active: true,
+    };
+    const password = temporaryPassword();
+    database.users.push(user);
+    db.save();
+    db.setPasswordHash(user.id, await bcrypt.hash(password, 10), { mustChange: true });
+
+    // The temporary password is shown once to the admin and never stored in plain text
+    res.status(201).json({ user, temporaryPassword: password });
+  })
+);
+
+app.put(
+  '/api/employees/:id',
+  authMiddleware,
+  requireRole(['admin']),
+  route((req, res) => {
+    const database = db.getData();
+    const user = findEmployee(req);
+    const body = req.body ?? {};
+
+    const name = text(body.name, 'Name', 100);
+    if (name !== undefined && !name) throw new HttpError(400, 'Name is required');
+    const email = text(body.email, 'Email', 200)?.toLowerCase();
+    if (email !== undefined) {
+      if (!EMAIL_PATTERN.test(email)) throw new HttpError(400, 'Enter a valid email');
+      if (database.users.some((u) => u.id !== user.id && u.email.toLowerCase() === email)) {
+        throw new HttpError(400, 'Someone already uses that email');
+      }
+    }
+    const role = oneOf(body.role, ROLES, 'role');
+    if (role && role !== 'admin' && user.role === 'admin' && user.active !== false && activeAdmins().length === 1) {
+      throw new HttpError(400, 'Keep at least one administrator. Make someone else an admin first.');
+    }
+
+    if (name) {
+      user.name = name;
+      user.initials = initialsOf(name);
+    }
+    if (email) user.email = email;
+    if (role) user.role = role;
+    const title = text(body.title, 'Job title', 100);
+    if (title) user.title = title;
+    const department = text(body.department, 'Department', 100);
+    if (department) user.department = department;
+    const phone = text(body.phone, 'Phone', 50);
+    if (phone !== undefined) user.phone = phone;
+    const status = oneOf(body.status, USER_STATUSES, 'status');
+    if (status) user.status = status;
+
+    // Keep names shown on projects and tasks current
+    if (name) {
+      for (const p of database.projects) if (p.leadId === user.id) p.leadName = name;
+      for (const t of database.tasks) if (t.assigneeId === user.id) t.assigneeName = name;
+    }
+
+    db.save();
+    res.json(user);
+  })
+);
+
+app.post(
+  '/api/employees/:id/deactivate',
+  authMiddleware,
+  requireRole(['admin']),
+  route((req, res) => {
+    const user = findEmployee(req);
+    if (user.id === req.user!.id) throw new HttpError(400, 'You cannot deactivate your own account');
+    if (user.role === 'admin' && activeAdmins().length === 1) throw new HttpError(400, 'Keep at least one active administrator');
+    user.active = false;
+    db.save();
+    revokeSessions(user.id);
+    res.json(user);
+  })
+);
+
+app.post(
+  '/api/employees/:id/reactivate',
+  authMiddleware,
+  requireRole(['admin']),
+  route((req, res) => {
+    const user = findEmployee(req);
+    user.active = true;
+    db.save();
+    res.json(user);
+  })
+);
+
+app.post(
+  '/api/employees/:id/reset-password',
+  authMiddleware,
+  requireRole(['admin']),
+  route(async (req, res) => {
+    const user = findEmployee(req);
+    const password = temporaryPassword();
+    db.setPasswordHash(user.id, await bcrypt.hash(password, 10), { mustChange: true });
+    revokeSessions(user.id);
+    res.json({ temporaryPassword: password });
+  })
+);
+
+// ==========================================
+// BACKUPS (admins only)
+// ==========================================
+
+app.get('/api/admin/backups', authMiddleware, requireRole(['admin']), (req, res) => {
+  res.json({ backups: listBackups(), directory: BACKUP_DIR, keep: BACKUP_KEEP });
+});
+
+app.post(
+  '/api/admin/backups',
+  authMiddleware,
+  requireRole(['admin']),
+  route((req, res) => {
+    res.status(201).json(db.backup('manual'));
+  })
+);
+
+app.get(
+  '/api/admin/backups/:name/download',
+  authMiddleware,
+  requireRole(['admin']),
+  route((req, res) => {
+    const name = param(req, 'name');
+    if (!isBackupName(name)) throw new HttpError(400, 'Invalid backup name');
+    const file = backupPath(name);
+    if (!fs.existsSync(file)) throw new HttpError(404, 'Backup not found');
+    res.download(file, name);
+  })
+);
+
+// Live update stream (server-sent events). The client reads it with fetch so it can send its token.
+app.get('/api/events', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
+  const userId = req.user!.id;
+  res.set({
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-transform',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+  res.flushHeaders();
+  res.write(': connected\n\n');
+  addStream(userId, res);
+  req.on('close', () => removeStream(userId, res));
+});
+
+// ==========================================
+// USER WORKSPACE & DESKTOP PROJECT TABS
+// ==========================================
+
+function ensureWorkspace(userId: string): UserWorkspace {
+  const database = db.getData();
+  if (!database.workspaces[userId]) {
+    database.workspaces[userId] = {
+      id: `ws-${userId}`,
+      userId,
+      tabs: [],
+      activeTabId: 'dashboard',
+      updatedAt: now(),
+    };
+  }
+  return database.workspaces[userId];
+}
+
+// Get current user workspace (with graceful filtering of deleted/inaccessible projects)
+app.get('/api/workspace', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
+  const user = req.user!;
+  const database = db.getData();
+  const workspace = ensureWorkspace(user.id);
+
+  // Sanitize tabs: filter out projects that no longer exist or user has no permission to view
+  const validTabs: WorkspaceTab[] = [];
+  const projectDetailsMap: Record<string, Partial<Project>> = {};
+
+  for (const tab of workspace.tabs) {
+    const project = database.projects.find((p) => p.id === tab.projectId);
+    if (project && canUserViewProject(user, project)) {
+      validTabs.push(tab);
+      projectDetailsMap[project.id] = {
+        id: project.id,
+        code: project.code,
+        name: project.name,
+        clientName: project.clientName,
+        status: project.status,
+        priority: project.priority,
+      };
+    }
+  }
+
+  // Ensure activeTabId is valid
+  let activeTabId = workspace.activeTabId;
+  if (!isSystemTab(activeTabId) && !validTabs.some((t) => t.projectId === activeTabId)) {
+    activeTabId = validTabs.length > 0 ? validTabs[validTabs.length - 1].projectId : 'dashboard';
+  }
+
+  const favorites = (workspace.favoriteProjectIds ?? []).filter((id) => {
+    const project = database.projects.find((p) => p.id === id);
+    return !!project && canUserViewProject(user, project);
+  });
+  workspace.favoriteProjectIds = favorites;
+
+  if (validTabs.length !== workspace.tabs.length || activeTabId !== workspace.activeTabId) {
+    workspace.tabs = validTabs;
+    workspace.activeTabId = activeTabId;
+    workspace.updatedAt = now();
+  }
+  db.save();
+
+  res.json({ workspace, projectsMap: projectDetailsMap });
+});
+
+// Update current user workspace tabs and active tab
+app.put('/api/workspace', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
+  const user = req.user!;
+  const { tabs, activeTabId } = req.body;
+  const database = db.getData();
+
+  if (!Array.isArray(tabs)) {
+    res.status(400).json({ error: 'Invalid tabs payload' });
+    return;
+  }
+
+  // Keep only viewable projects, deduplicated, in the order given
+  const seenProjectIds = new Set<string>();
+  const sanitizedTabs: WorkspaceTab[] = [];
+
+  for (const tab of tabs) {
+    if (!tab?.projectId || seenProjectIds.has(tab.projectId)) continue;
+    const project = database.projects.find((p) => p.id === tab.projectId);
+    if (!project || !canUserViewProject(user, project)) continue;
+
+    seenProjectIds.add(tab.projectId);
+    sanitizedTabs.push({
+      projectId: tab.projectId,
+      tabOrder: sanitizedTabs.length,
+      openedAt: tab.openedAt || now(),
+    });
+  }
+
+  let finalActiveTabId = typeof activeTabId === 'string' && activeTabId ? activeTabId : 'dashboard';
+  if (!isSystemTab(finalActiveTabId) && !seenProjectIds.has(finalActiveTabId)) {
+    finalActiveTabId = sanitizedTabs.length > 0 ? sanitizedTabs[sanitizedTabs.length - 1].projectId : 'dashboard';
+  }
+
+  const updatedWorkspace: UserWorkspace = {
+    id: `ws-${user.id}`,
+    userId: user.id,
+    tabs: sanitizedTabs,
+    activeTabId: finalActiveTabId,
+    favoriteProjectIds: database.workspaces[user.id]?.favoriteProjectIds ?? [],
+    updatedAt: now(),
+  };
+
+  database.workspaces[user.id] = updatedWorkspace;
+  db.save();
+
+  res.json(updatedWorkspace);
+});
+
+// Star or unstar a project in the sidebar
+app.post('/api/workspace/favorites', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
+  const user = req.user!;
+  const { projectId, favorite } = req.body ?? {};
+  const project = db.getData().projects.find((p) => p.id === projectId);
+  if (!project || !canUserViewProject(user, project)) {
+    res.status(404).json({ error: 'Project not found' });
+    return;
+  }
+  const workspace = ensureWorkspace(user.id);
+  const current = (workspace.favoriteProjectIds ?? []).filter((id) => id !== projectId);
+  workspace.favoriteProjectIds = favorite ? [...current, projectId] : current;
+  workspace.updatedAt = now();
+  db.save();
+  res.json(workspace);
+});
+
+const MAX_RECENT_TABS = 12;
+
+// Open a project (records it as recent) and make it active
+app.post('/api/workspace/open-tab', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
+  const user = req.user!;
+  const { projectId } = req.body;
+  const project = db.getData().projects.find((p) => p.id === projectId);
+
+  if (!project) {
+    res.status(404).json({ error: 'Project not found' });
+    return;
+  }
+
+  if (!canUserViewProject(user, project)) {
+    res.status(403).json({ error: 'Access denied: You do not have permission to open this project' });
+    return;
+  }
+
+  // tabs doubles as the user's recently opened projects, most recent last
+  const workspace = ensureWorkspace(user.id);
+  const existing = workspace.tabs.find((t) => t.projectId === projectId);
+  workspace.tabs = workspace.tabs.filter((t) => t.projectId !== projectId);
+  workspace.tabs.push(existing ?? { projectId, tabOrder: 0, openedAt: now() });
+  if (workspace.tabs.length > MAX_RECENT_TABS) workspace.tabs = workspace.tabs.slice(-MAX_RECENT_TABS);
+  workspace.tabs.forEach((t, i) => (t.tabOrder = i));
+
+  workspace.activeTabId = projectId;
+  workspace.updatedAt = now();
+  db.save();
+
+  res.json(workspace);
+});
+
+// Close a tab. Only affects this user's workspace; NEVER deletes or archives the project.
+app.post('/api/workspace/close-tab', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
+  const user = req.user!;
+  const { projectId } = req.body;
+  const workspace = db.getData().workspaces[user.id];
+
+  if (!workspace) {
+    res.status(404).json({ error: 'Workspace not found' });
+    return;
+  }
+
+  removeProjectFromWorkspaces(projectId, [user.id]);
+  workspace.updatedAt = now();
+  db.save();
+
+  res.json(workspace);
+});
+
+// ==========================================
+// PROJECTS DIRECTORY & CRUD
+// ==========================================
+
+app.get('/api/projects', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
+  const user = req.user!;
+  const { search, status, filter } = req.query;
+
+  let projects = db.getData().projects.filter((p) => canUserViewProject(user, p));
+
+  if (status && status !== 'all') {
+    projects = projects.filter((p) => p.status === status);
+  }
+
+  if (filter === 'my_projects') {
+    projects = projects.filter((p) => projectMemberIds(p).has(user.id));
+  } else if (filter === 'managed_by_me') {
+    projects = projects.filter((p) => p.leadId === user.id);
+  }
+
+  if (typeof search === 'string' && search.trim() !== '') {
+    const query = search.toLowerCase();
+    projects = projects.filter(
+      (p) =>
+        p.name.toLowerCase().includes(query) ||
+        p.code.toLowerCase().includes(query) ||
+        p.clientName.toLowerCase().includes(query) ||
+        p.category.toLowerCase().includes(query)
+    );
+  }
+
+  res.json(projects);
+});
+
+app.post(
+  '/api/projects',
+  authMiddleware,
+  requireRole(['admin', 'pm']),
+  route((req, res) => {
+    const user = req.user!;
+    const database = db.getData();
+    const body = req.body ?? {};
+
+    const name = text(body.name, 'Project name', 200, true)!;
+    const clientId = text(body.clientId, 'Client', 100, true)!;
+    const client = database.clients.find((c) => c.id === clientId);
+    if (!client) throw new HttpError(400, 'Selected client does not exist');
+
+    const code = text(body.code, 'Project code', 20)?.toUpperCase() || `PRJ-${Math.floor(100 + Math.random() * 900)}`;
+    if (database.projects.some((p) => p.code === code)) throw new HttpError(400, `Project code ${code} is already in use`);
+
+    // Team: only real employees, always including the creator (who becomes lead)
+    const team = new Set<string>(
+      Array.isArray(body.teamMemberIds)
+        ? body.teamMemberIds.filter((id: unknown) => database.users.some((u) => u.id === id))
+        : []
+    );
+    team.add(user.id);
+
+    const newProject: Project = {
+      id: newId('prj'),
+      code,
+      name,
+      clientId,
+      clientName: client.name,
+      description: text(body.description, 'Description', 5000) ?? '',
+      status: 'active',
+      priority: oneOf(body.priority, PRIORITIES, 'priority') ?? 'medium',
+      leadId: user.id,
+      leadName: user.name,
+      leadAvatar: user.avatar,
+      budget: amount(body.budget, 'Budget') ?? 25000,
+      spent: 0,
+      startDate: dateStr(body.startDate, 'Start date') ?? daysFromNow(0),
+      targetDate: dateStr(body.targetDate, 'Target date') ?? daysFromNow(90),
+      completionPercentage: 0,
+      category: text(body.category, 'Category', 100) || 'General Project',
+      teamMemberIds: [...team],
+      createdAt: now(),
+      updatedAt: now(),
+    };
+
+    database.projects.unshift(newProject);
+    logActivity(newProject.id, user, `created new project "${newProject.name}"`, 'general');
+    notify(newProject.teamMemberIds, user, {
+      title: 'Added to New Project',
+      message: `${user.name} added you to the new project "${newProject.name}".`,
+      type: 'info',
+      project: newProject,
+    });
+
+    db.save();
+    res.status(201).json(newProject);
+  })
+);
+
+app.get('/api/projects/:id', authMiddleware, requireProjectAccess, (req: AuthenticatedRequest, res: Response) => {
+  res.json(getProject(req));
+});
+
+app.put(
+  '/api/projects/:id',
+  authMiddleware,
+  requireProjectAccess,
+  requireProjectManager,
+  route((req, res) => {
+    const user = req.user!;
+    const database = db.getData();
+    const project = getProject(req);
+    const body = req.body ?? {};
+
+    const name = text(body.name, 'Project name', 200);
+    const code = text(body.code, 'Project code', 20)?.toUpperCase();
+    const status = oneOf(body.status, PROJECT_STATUSES, 'status');
+
+    if (name !== undefined && name === '') throw new HttpError(400, 'Project name is required');
+    if (code && database.projects.some((p) => p.code === code && p.id !== project.id)) {
+      throw new HttpError(400, `Project code ${code} is already in use`);
+    }
+
+    if (name) project.name = name;
+    if (code) project.code = code;
+    const description = text(body.description, 'Description', 5000);
+    if (description !== undefined) project.description = description;
+    const priority = oneOf(body.priority, PRIORITIES, 'priority');
+    if (priority) project.priority = priority;
+    const budget = amount(body.budget, 'Budget');
+    if (budget !== undefined) project.budget = budget;
+    const spent = amount(body.spent, 'Spent');
+    if (spent !== undefined) project.spent = spent;
+    const startDate = dateStr(body.startDate, 'Start date');
+    if (startDate) project.startDate = startDate;
+    const targetDate = dateStr(body.targetDate, 'Target date');
+    if (targetDate) project.targetDate = targetDate;
+    const category = text(body.category, 'Category', 100);
+    if (category) project.category = category;
+    if (Array.isArray(body.teamMemberIds)) {
+      const team = new Set<string>(body.teamMemberIds.filter((id: unknown) => database.users.some((u) => u.id === id)));
+      team.add(project.leadId);
+      project.teamMemberIds = [...team];
+    }
+
+    if (status && status !== project.status) {
+      const oldStatus = project.status;
+      project.status = status;
+      logActivity(project.id, user, `changed project status from ${oldStatus} to ${status}`, 'status');
+      notify(projectMemberIds(project), user, {
+        title: 'Project Status Changed',
+        message: `${user.name} changed "${project.name}" from ${oldStatus.replace('_', ' ')} to ${status.replace('_', ' ')}.`,
+        type: status === 'archived' || status === 'on_hold' ? 'warning' : 'info',
+        project,
+      });
+    }
+
+    // Keep denormalized names on tasks in sync
+    for (const t of database.tasks) {
+      if (t.projectId === project.id) {
+        t.projectName = project.name;
+        t.projectCode = project.code;
+      }
+    }
+
+    project.updatedAt = now();
+    logActivity(project.id, user, 'updated project details and settings', 'general');
+
+    db.save();
+    res.json(project);
+  })
+);
+
+// Permanently delete a project and everything that belongs to it
+app.delete(
+  '/api/projects/:id',
+  authMiddleware,
+  requireRole(['admin', 'pm']),
+  route((req, res) => {
+    const user = req.user!;
+    const database = db.getData();
+    const project = getProject(req);
+
+    if (!canManageProject(user, project)) {
+      throw new HttpError(403, 'You can only delete projects you lead');
+    }
+
+    const keep = <T extends { projectId?: string }>(items: T[]) => items.filter((i) => i.projectId !== project.id);
+    database.projects = database.projects.filter((p) => p.id !== project.id);
+    database.tasks = keep(database.tasks);
+    database.milestones = keep(database.milestones);
+    database.deliverables = keep(database.deliverables);
+    database.chatMessages = keep(database.chatMessages);
+    database.files = keep(database.files);
+    database.notes = keep(database.notes);
+    database.links = keep(database.links);
+    database.activities = keep(database.activities);
+    database.notifications = keep(database.notifications);
+    removeProjectFromWorkspaces(project.id);
+
+    fs.rmSync(path.join(UPLOADS_DIR, project.id), { recursive: true, force: true });
+
+    db.save();
+    res.json({ message: 'Project successfully deleted' });
+  })
+);
+
+// ==========================================
+// PROJECT WORKSPACE SUB-RESOURCES
+// ==========================================
+
+// 1. Tasks
+app.get('/api/projects/:id/tasks', authMiddleware, requireProjectAccess, (req, res) => {
+  res.json(db.getData().tasks.filter((t) => t.projectId === param(req, 'id')));
+});
+
+app.post(
+  '/api/projects/:id/tasks',
+  authMiddleware,
+  requireProjectAccess,
+  route((req, res) => {
+    const user = req.user!;
+    const database = db.getData();
+    const project = getProject(req);
+    const body = req.body ?? {};
+
+    const assignee = resolveAssignee(project, body.assigneeId || user.id);
+
+    const newTask: Task = {
+      id: newId('tsk'),
+      projectId: project.id,
+      projectCode: project.code,
+      projectName: project.name,
+      title: text(body.title, 'Task title', 300, true)!,
+      description: text(body.description, 'Description', 5000) ?? '',
+      status: oneOf(body.status, TASK_STATUSES, 'status') ?? 'todo',
+      priority: oneOf(body.priority, PRIORITIES, 'priority') ?? 'medium',
+      assigneeId: assignee.id,
+      assigneeName: assignee.name,
+      assigneeAvatar: assignee.avatar,
+      dueDate: dateStr(body.dueDate, 'Due date') ?? daysFromNow(7),
+      tags: body.tags !== undefined ? sanitizeTags(body.tags) : [],
+      subtasks: body.subtasks !== undefined ? sanitizeSubtasks(body.subtasks) : [],
+      createdAt: now(),
+      updatedAt: now(),
+    };
+
+    database.tasks.unshift(newTask);
+    logActivity(project.id, user, `created task "${newTask.title}"`, 'task');
+    notify([assignee.id], user, {
+      title: 'New Task Assigned',
+      message: `${user.name} assigned you "${newTask.title}".`,
+      type: newTask.priority === 'urgent' ? 'alert' : 'info',
+      project,
+    });
+    recalcCompletion(project.id);
+
+    db.save();
+    res.status(201).json(newTask);
+  })
+);
+
+app.put(
+  '/api/projects/:id/tasks/:taskId',
+  authMiddleware,
+  requireProjectAccess,
+  route((req, res) => {
+    const user = req.user!;
+    const database = db.getData();
+    const project = getProject(req);
+    const task = database.tasks.find((t) => t.id === param(req, 'taskId') && t.projectId === project.id);
+    if (!task) throw new HttpError(404, 'Task not found');
+    const body = req.body ?? {};
+
+    const title = text(body.title, 'Task title', 300);
+    if (title !== undefined && title === '') throw new HttpError(400, 'Task title is required');
+    if (title) task.title = title;
+    const description = text(body.description, 'Description', 5000);
+    if (description !== undefined) task.description = description;
+
+    const status = oneOf(body.status, TASK_STATUSES, 'status');
+    if (status && status !== task.status) {
+      const oldStatus = task.status;
+      task.status = status;
+      logActivity(project.id, user, `moved task "${task.title}" from ${oldStatus} to ${status}`, 'task');
+      if (status === 'done') {
+        notify([project.leadId], user, {
+          title: 'Task Completed',
+          message: `${user.name} completed "${task.title}".`,
+          type: 'success',
+          project,
+        });
+      }
+    }
+
+    const priority = oneOf(body.priority, PRIORITIES, 'priority');
+    if (priority) task.priority = priority;
+
+    if (body.assigneeId && body.assigneeId !== task.assigneeId) {
+      const assignee = resolveAssignee(project, body.assigneeId);
+      task.assigneeId = assignee.id;
+      task.assigneeName = assignee.name;
+      task.assigneeAvatar = assignee.avatar;
+      logActivity(project.id, user, `assigned task "${task.title}" to ${assignee.name}`, 'task');
+      notify([assignee.id], user, {
+        title: 'Task Assigned to You',
+        message: `${user.name} assigned you "${task.title}".`,
+        type: 'info',
+        project,
+      });
+    }
+
+    const dueDate = dateStr(body.dueDate, 'Due date');
+    if (dueDate) task.dueDate = dueDate;
+    if (body.tags !== undefined) task.tags = sanitizeTags(body.tags);
+    if (body.subtasks !== undefined) task.subtasks = sanitizeSubtasks(body.subtasks);
+
+    task.updatedAt = now();
+    recalcCompletion(project.id);
+
+    db.save();
+    res.json(task);
+  })
+);
+
+app.delete(
+  '/api/projects/:id/tasks/:taskId',
+  authMiddleware,
+  requireProjectAccess,
+  route((req, res) => {
+    const user = req.user!;
+    const database = db.getData();
+    const project = getProject(req);
+    const task = database.tasks.find((t) => t.id === param(req, 'taskId') && t.projectId === project.id);
+    if (!task) throw new HttpError(404, 'Task not found');
+
+    database.tasks = database.tasks.filter((t) => t.id !== task.id);
+    logActivity(project.id, user, `deleted task "${task.title}"`, 'task');
+    recalcCompletion(project.id);
+
+    db.save();
+    res.json({ message: 'Task deleted' });
+  })
+);
+
+// 2. Milestones
+app.get('/api/projects/:id/milestones', authMiddleware, requireProjectAccess, (req, res) => {
+  res.json(db.getData().milestones.filter((m) => m.projectId === param(req, 'id')));
+});
+
+function resolveOwner(project: Project, ownerId: unknown): User {
+  const owner = db.getData().users.find((u) => u.id === ownerId);
+  if (!owner || !projectMemberIds(project).has(owner.id)) {
+    throw new HttpError(400, 'Owner must be a member of this project team');
+  }
+  return owner;
+}
+
+app.post(
+  '/api/projects/:id/milestones',
+  authMiddleware,
+  requireProjectAccess,
+  requireProjectManager,
+  route((req, res) => {
+    const user = req.user!;
+    const project = getProject(req);
+    const body = req.body ?? {};
+    const owner = resolveOwner(project, body.ownerId || user.id);
+
+    const progress = amount(body.progress, 'Progress') ?? 0;
+    const newMilestone: ProjectMilestone = {
+      id: newId('mls'),
+      projectId: project.id,
+      title: text(body.title, 'Milestone title', 200, true)!,
+      description: text(body.description, 'Description', 2000) ?? '',
+      targetDate: dateStr(body.targetDate, 'Target date') ?? daysFromNow(30),
+      status: oneOf(body.status, MILESTONE_STATUSES, 'status') ?? 'pending',
+      progress: Math.min(100, progress),
+      ownerId: owner.id,
+      ownerName: owner.name,
+    };
+
+    db.getData().milestones.push(newMilestone);
+    logActivity(project.id, user, `added milestone "${newMilestone.title}"`, 'milestone');
+    db.save();
+    res.status(201).json(newMilestone);
+  })
+);
+
+app.put(
+  '/api/projects/:id/milestones/:milestoneId',
+  authMiddleware,
+  requireProjectAccess,
+  requireProjectManager,
+  route((req, res) => {
+    const user = req.user!;
+    const project = getProject(req);
+    const milestone = db
+      .getData()
+      .milestones.find((m) => m.id === param(req, 'milestoneId') && m.projectId === project.id);
+    if (!milestone) throw new HttpError(404, 'Milestone not found');
+    const body = req.body ?? {};
+
+    const title = text(body.title, 'Milestone title', 200);
+    if (title) milestone.title = title;
+    const description = text(body.description, 'Description', 2000);
+    if (description !== undefined) milestone.description = description;
+    const targetDate = dateStr(body.targetDate, 'Target date');
+    if (targetDate) milestone.targetDate = targetDate;
+    const progress = amount(body.progress, 'Progress');
+    if (progress !== undefined) milestone.progress = Math.min(100, progress);
+    if (body.ownerId) {
+      const owner = resolveOwner(project, body.ownerId);
+      milestone.ownerId = owner.id;
+      milestone.ownerName = owner.name;
+    }
+    const status = oneOf(body.status, MILESTONE_STATUSES, 'status');
+    if (status && status !== milestone.status) {
+      milestone.status = status;
+      if (status === 'completed') milestone.progress = 100;
+      logActivity(project.id, user, `marked milestone "${milestone.title}" as ${status.replace('_', ' ')}`, 'milestone');
+      if (status === 'completed') {
+        notify(projectMemberIds(project), user, {
+          title: 'Milestone Completed',
+          message: `"${milestone.title}" in ${project.name} was completed.`,
+          type: 'success',
+          project,
+        });
+      }
+    }
+
+    db.save();
+    res.json(milestone);
+  })
+);
+
+app.delete(
+  '/api/projects/:id/milestones/:milestoneId',
+  authMiddleware,
+  requireProjectAccess,
+  requireProjectManager,
+  route((req, res) => {
+    const database = db.getData();
+    const project = getProject(req);
+    const milestone = database.milestones.find((m) => m.id === param(req, 'milestoneId') && m.projectId === project.id);
+    if (!milestone) throw new HttpError(404, 'Milestone not found');
+    database.milestones = database.milestones.filter((m) => m.id !== milestone.id);
+    logActivity(project.id, req.user!, `removed milestone "${milestone.title}"`, 'milestone');
+    db.save();
+    res.json({ message: 'Milestone deleted' });
+  })
+);
+
+// 3. Deliverables
+app.get('/api/projects/:id/deliverables', authMiddleware, requireProjectAccess, (req, res) => {
+  res.json(db.getData().deliverables.filter((d) => d.projectId === param(req, 'id')));
+});
+
+app.post(
+  '/api/projects/:id/deliverables',
+  authMiddleware,
+  requireProjectAccess,
+  requireProjectManager,
+  route((req, res) => {
+    const user = req.user!;
+    const project = getProject(req);
+    const body = req.body ?? {};
+    const owner = resolveOwner(project, body.ownerId || user.id);
+
+    const newDeliverable: ProjectDeliverable = {
+      id: newId('del'),
+      projectId: project.id,
+      title: text(body.title, 'Deliverable title', 200, true)!,
+      description: text(body.description, 'Description', 2000) ?? '',
+      dueDate: dateStr(body.dueDate, 'Due date') ?? daysFromNow(45),
+      status: 'pending',
+      ownerId: owner.id,
+      ownerName: owner.name,
+    };
+
+    db.getData().deliverables.push(newDeliverable);
+    logActivity(project.id, user, `added deliverable "${newDeliverable.title}"`, 'general');
+    notify([owner.id], user, {
+      title: 'Deliverable Assigned',
+      message: `You own the deliverable "${newDeliverable.title}" in ${project.name}.`,
+      type: 'info',
+      project,
+    });
+    db.save();
+    res.status(201).json(newDeliverable);
+  })
+);
+
+app.put(
+  '/api/projects/:id/deliverables/:deliverableId',
+  authMiddleware,
+  requireProjectAccess,
+  requireProjectManager,
+  route((req, res) => {
+    const user = req.user!;
+    const project = getProject(req);
+    const deliverable = db
+      .getData()
+      .deliverables.find((d) => d.id === param(req, 'deliverableId') && d.projectId === project.id);
+    if (!deliverable) throw new HttpError(404, 'Deliverable not found');
+    const body = req.body ?? {};
+
+    const title = text(body.title, 'Deliverable title', 200);
+    if (title) deliverable.title = title;
+    const description = text(body.description, 'Description', 2000);
+    if (description !== undefined) deliverable.description = description;
+    const dueDate = dateStr(body.dueDate, 'Due date');
+    if (dueDate) deliverable.dueDate = dueDate;
+    if (body.ownerId) {
+      const owner = resolveOwner(project, body.ownerId);
+      deliverable.ownerId = owner.id;
+      deliverable.ownerName = owner.name;
+    }
+
+    const status = oneOf(body.status, DELIVERABLE_STATUSES, 'status');
+    if (status && status !== deliverable.status) {
+      deliverable.status = status;
+      if (status === 'approved') {
+        deliverable.signedOffBy = user.name;
+        deliverable.signedOffAt = now();
+      } else {
+        delete deliverable.signedOffBy;
+        delete deliverable.signedOffAt;
+      }
+      logActivity(project.id, user, `set deliverable "${deliverable.title}" to ${status.replace('_', ' ')}`, 'general');
+      notify([deliverable.ownerId], user, {
+        title: status === 'approved' ? 'Deliverable Approved' : 'Deliverable Status Changed',
+        message: `"${deliverable.title}" is now ${status.replace('_', ' ')}.`,
+        type: status === 'approved' ? 'success' : status === 'rejected' ? 'alert' : 'info',
+        project,
+      });
+    }
+
+    db.save();
+    res.json(deliverable);
+  })
+);
+
+app.delete(
+  '/api/projects/:id/deliverables/:deliverableId',
+  authMiddleware,
+  requireProjectAccess,
+  requireProjectManager,
+  route((req, res) => {
+    const database = db.getData();
+    const project = getProject(req);
+    const deliverable = database.deliverables.find(
+      (d) => d.id === param(req, 'deliverableId') && d.projectId === project.id
+    );
+    if (!deliverable) throw new HttpError(404, 'Deliverable not found');
+    database.deliverables = database.deliverables.filter((d) => d.id !== deliverable.id);
+    logActivity(project.id, req.user!, `removed deliverable "${deliverable.title}"`, 'general');
+    db.save();
+    res.json({ message: 'Deliverable deleted' });
+  })
+);
+
+// 4. Chat Messages
+app.get('/api/projects/:id/chat', authMiddleware, requireProjectAccess, (req, res) => {
+  res.json(db.getData().chatMessages.filter((m) => m.projectId === param(req, 'id')));
+});
+
+app.post(
+  '/api/projects/:id/chat',
+  authMiddleware,
+  requireProjectAccess,
+  route((req, res) => {
+    const user = req.user!;
+    const project = getProject(req);
+
+    const newMsg: ProjectChatMessage = {
+      id: newId('msg'),
+      projectId: project.id,
+      senderId: user.id,
+      senderName: user.name,
+      senderAvatar: user.avatar,
+      senderRole: user.title,
+      text: text(req.body?.text, 'Message', 4000, true)!,
+      timestamp: now(),
+      reactions: {},
+    };
+
+    db.getData().chatMessages.push(newMsg);
+    db.save();
+    res.status(201).json(newMsg);
+  })
+);
+
+// 5. Files (real uploads, stored under data/uploads/<projectId>/)
+const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: (req, _file, cb) => {
+      const dir = path.join(UPLOADS_DIR, String(req.params.id));
+      fs.mkdirSync(dir, { recursive: true });
+      cb(null, dir);
+    },
+    // Stored under a generated name; the original name is only kept as metadata
+    filename: (_req, file, cb) => cb(null, `${uuidv4()}${path.extname(file.originalname).slice(0, 12)}`),
+  }),
+  limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 },
+});
+
+function describeFileType(name: string, mime: string): string {
+  const ext = path.extname(name).replace('.', '').toUpperCase();
+  if (mime.startsWith('image/')) return `${ext || 'Image'} Image`;
+  if (mime === 'application/pdf') return 'PDF';
+  return ext || 'Document';
+}
+
+app.get('/api/projects/:id/files', authMiddleware, requireProjectAccess, (req, res) => {
+  res.json(db.getData().files.filter((f) => f.projectId === param(req, 'id')));
+});
+
+app.post(
+  '/api/projects/:id/files',
+  authMiddleware,
+  requireProjectAccess,
+  upload.single('file'),
+  route((req, res) => {
+    const user = req.user!;
+    const project = getProject(req);
+    const file = req.file;
+    if (!file) throw new HttpError(400, 'Choose a file to upload');
+
+    // Browsers send multipart filenames as latin1; recover UTF-8 names
+    const originalName = Buffer.from(file.originalname, 'latin1').toString('utf8').slice(0, 255);
+
+    const newFile: ProjectFile = {
+      id: newId('fil'),
+      projectId: project.id,
+      name: originalName,
+      category: oneOf(req.body?.category, FILE_CATEGORIES, 'category') ?? 'general',
+      fileSize: formatBytes(file.size),
+      fileType: describeFileType(originalName, file.mimetype),
+      uploadedBy: user.name,
+      uploadedById: user.id,
+      uploadedAt: now(),
+      downloadUrl: '',
+      storedName: file.filename,
+      mimeType: file.mimetype,
+    };
+    newFile.downloadUrl = `/api/projects/${project.id}/files/${newFile.id}/download`;
+
+    db.getData().files.unshift(newFile);
+    logActivity(project.id, user, `uploaded file "${newFile.name}"`, 'file');
+    db.save();
+    res.status(201).json(newFile);
+  })
+);
+
+app.get(
+  '/api/projects/:id/files/:fileId/download',
+  authMiddleware,
+  requireProjectAccess,
+  route((req, res) => {
+    const file = db.getData().files.find((f) => f.id === param(req, 'fileId') && f.projectId === param(req, 'id'));
+    if (!file) throw new HttpError(404, 'File not found');
+    if (!file.storedName) throw new HttpError(404, 'This is a sample entry with no stored file content');
+    const fullPath = path.join(UPLOADS_DIR, file.projectId, path.basename(file.storedName));
+    if (!fs.existsSync(fullPath)) throw new HttpError(404, 'Stored file is missing on the server');
+    res.download(fullPath, file.name);
+  })
+);
+
+app.delete(
+  '/api/projects/:id/files/:fileId',
+  authMiddleware,
+  requireProjectAccess,
+  route((req, res) => {
+    const user = req.user!;
+    const database = db.getData();
+    const project = getProject(req);
+    const file = database.files.find((f) => f.id === param(req, 'fileId') && f.projectId === project.id);
+    if (!file) throw new HttpError(404, 'File not found');
+    if (file.uploadedById !== user.id && !canManageProject(user, project)) {
+      throw new HttpError(403, 'Only the uploader or the project lead can delete this file');
+    }
+
+    database.files = database.files.filter((f) => f.id !== file.id);
+    if (file.storedName) {
+      fs.rmSync(path.join(UPLOADS_DIR, project.id, path.basename(file.storedName)), { force: true });
+    }
+    logActivity(project.id, user, `deleted file "${file.name}"`, 'file');
+    db.save();
+    res.json({ message: 'File deleted' });
+  })
+);
+
+// 6. Notes & Wiki
+app.get('/api/projects/:id/notes', authMiddleware, requireProjectAccess, (req, res) => {
+  res.json(db.getData().notes.filter((n) => n.projectId === param(req, 'id')));
+});
+
+app.post(
+  '/api/projects/:id/notes',
+  authMiddleware,
+  requireProjectAccess,
+  route((req, res) => {
+    const user = req.user!;
+    const project = getProject(req);
+    const body = req.body ?? {};
+
+    const newNote: ProjectNote = {
+      id: newId('not'),
+      projectId: project.id,
+      title: text(body.title, 'Note title', 200, true)!,
+      content: text(body.content, 'Note content', 50000) ?? '',
+      category: oneOf(body.category, NOTE_CATEGORIES, 'category') ?? 'meeting',
+      authorId: user.id,
+      authorName: user.name,
+      updatedAt: now(),
+    };
+
+    db.getData().notes.unshift(newNote);
+    logActivity(project.id, user, `published note "${newNote.title}"`, 'general');
+    db.save();
+    res.status(201).json(newNote);
+  })
+);
+
+function findOwnedNote(req: AuthenticatedRequest): ProjectNote {
+  const project = getProject(req);
+  const note = db.getData().notes.find((n) => n.id === param(req, 'noteId') && n.projectId === project.id);
+  if (!note) throw new HttpError(404, 'Note not found');
+  if (note.authorId !== req.user!.id && !canManageProject(req.user!, project)) {
+    throw new HttpError(403, 'Only the author or the project lead can change this note');
+  }
+  return note;
+}
+
+app.put(
+  '/api/projects/:id/notes/:noteId',
+  authMiddleware,
+  requireProjectAccess,
+  route((req, res) => {
+    const note = findOwnedNote(req);
+    const body = req.body ?? {};
+    const title = text(body.title, 'Note title', 200);
+    if (title !== undefined && title === '') throw new HttpError(400, 'Note title is required');
+    if (title) note.title = title;
+    const content = text(body.content, 'Note content', 50000);
+    if (content !== undefined) note.content = content;
+    const category = oneOf(body.category, NOTE_CATEGORIES, 'category');
+    if (category) note.category = category;
+    note.updatedAt = now();
+    db.save();
+    res.json(note);
+  })
+);
+
+app.delete(
+  '/api/projects/:id/notes/:noteId',
+  authMiddleware,
+  requireProjectAccess,
+  route((req, res) => {
+    const note = findOwnedNote(req);
+    const database = db.getData();
+    database.notes = database.notes.filter((n) => n.id !== note.id);
+    db.save();
+    res.json({ message: 'Note deleted' });
+  })
+);
+
+// 7. Project Links
+app.get('/api/projects/:id/links', authMiddleware, requireProjectAccess, (req, res) => {
+  res.json(db.getData().links.filter((l) => l.projectId === param(req, 'id')));
+});
+
+app.post(
+  '/api/projects/:id/links',
+  authMiddleware,
+  requireProjectAccess,
+  route((req, res) => {
+    const user = req.user!;
+    const project = getProject(req);
+    const body = req.body ?? {};
+
+    const newLink: ProjectLink = {
+      id: newId('lnk'),
+      projectId: project.id,
+      title: text(body.title, 'Link title', 200, true)!,
+      url: httpUrl(body.url, 'URL', true)!,
+      category: oneOf(body.category, LINK_CATEGORIES, 'category') ?? 'other',
+      description: text(body.description, 'Description', 1000) ?? '',
+      addedBy: user.name,
+      addedById: user.id,
+      addedAt: now(),
+    };
+
+    db.getData().links.unshift(newLink);
+    db.save();
+    res.status(201).json(newLink);
+  })
+);
+
+function findOwnedLink(req: AuthenticatedRequest): ProjectLink {
+  const project = getProject(req);
+  const link = db.getData().links.find((l) => l.id === param(req, 'linkId') && l.projectId === project.id);
+  if (!link) throw new HttpError(404, 'Link not found');
+  if (link.addedById !== req.user!.id && !canManageProject(req.user!, project)) {
+    throw new HttpError(403, 'Only the person who added this link or the project lead can change it');
+  }
+  return link;
+}
+
+app.put(
+  '/api/projects/:id/links/:linkId',
+  authMiddleware,
+  requireProjectAccess,
+  route((req, res) => {
+    const link = findOwnedLink(req);
+    const body = req.body ?? {};
+    const title = text(body.title, 'Link title', 200);
+    if (title) link.title = title;
+    const url = httpUrl(body.url, 'URL');
+    if (url) link.url = url;
+    const category = oneOf(body.category, LINK_CATEGORIES, 'category');
+    if (category) link.category = category;
+    const description = text(body.description, 'Description', 1000);
+    if (description !== undefined) link.description = description;
+    db.save();
+    res.json(link);
+  })
+);
+
+app.delete(
+  '/api/projects/:id/links/:linkId',
+  authMiddleware,
+  requireProjectAccess,
+  route((req, res) => {
+    const link = findOwnedLink(req);
+    const database = db.getData();
+    database.links = database.links.filter((l) => l.id !== link.id);
+    db.save();
+    res.json({ message: 'Link deleted' });
+  })
+);
+
+// 8. Team Members
+app.get('/api/projects/:id/team', authMiddleware, requireProjectAccess, (req, res) => {
+  const project = getProject(req);
+  const ids = projectMemberIds(project);
+  res.json(db.getData().users.filter((u) => ids.has(u.id)));
+});
+
+app.post(
+  '/api/projects/:id/team',
+  authMiddleware,
+  requireProjectAccess,
+  requireProjectManager,
+  route((req, res) => {
+    const user = req.user!;
+    const database = db.getData();
+    const project = getProject(req);
+    const targetEmployee = database.users.find((u) => u.id === req.body?.employeeId);
+    if (!targetEmployee) throw new HttpError(404, 'Employee not found');
+
+    if (!project.teamMemberIds.includes(targetEmployee.id)) {
+      project.teamMemberIds.push(targetEmployee.id);
+      logActivity(project.id, user, `added ${targetEmployee.name} to project team`, 'member');
+      notify([targetEmployee.id], user, {
+        title: 'Added to Project Team',
+        message: `${user.name} added you to "${project.name}".`,
+        type: 'info',
+        project,
+      });
+      db.save();
+    }
+
+    const ids = projectMemberIds(project);
+    res.json(database.users.filter((u) => ids.has(u.id)));
+  })
+);
+
+app.delete(
+  '/api/projects/:id/team/:memberId',
+  authMiddleware,
+  requireProjectAccess,
+  requireProjectManager,
+  route((req, res) => {
+    const user = req.user!;
+    const database = db.getData();
+    const project = getProject(req);
+    const memberId = param(req, 'memberId');
+
+    if (project.leadId === memberId) throw new HttpError(400, 'Cannot remove the Project Lead from the team');
+
+    const idx = project.teamMemberIds.indexOf(memberId);
+    if (idx !== -1) {
+      project.teamMemberIds.splice(idx, 1);
+      const removed = database.users.find((u) => u.id === memberId);
+      // Close their tab unless they can still see the project (e.g. they are an admin)
+      if (!removed || !canUserViewProject(removed, project)) removeProjectFromWorkspaces(project.id, [memberId]);
+      logActivity(project.id, user, `removed ${removed ? removed.name : memberId} from project team`, 'member');
+      db.save();
+    }
+
+    res.json({ message: 'Team member removed' });
+  })
+);
+
+// 9. Activity History
+app.get('/api/projects/:id/activity', authMiddleware, requireProjectAccess, (req, res) => {
+  res.json(db.getData().activities.filter((a) => a.projectId === param(req, 'id')));
+});
+
+// ==========================================
+// CLIENTS DIRECTORY & CRUD
+// ==========================================
+
+app.get('/api/clients', authMiddleware, (req, res) => {
+  const database = db.getData();
+  const { search } = req.query;
+  let clients = database.clients;
+
+  if (typeof search === 'string' && search.trim()) {
+    const q = search.toLowerCase();
+    clients = clients.filter(
+      (c) =>
+        c.name.toLowerCase().includes(q) ||
+        c.company.toLowerCase().includes(q) ||
+        c.contactPerson.toLowerCase().includes(q)
+    );
+  }
+
+  // Derived from projects, so it can never drift out of sync
+  res.json(
+    clients.map((c) => ({
+      ...c,
+      activeProjectsCount: database.projects.filter((p) => p.clientId === c.id && p.status === 'active').length,
+    }))
+  );
+});
+
+function clientFields(body: any, isAdmin: boolean): Partial<Client> {
+  const fields: Partial<Client> = {
+    name: text(body.name, 'Client name', 200),
+    company: text(body.company, 'Company', 200),
+    industry: text(body.industry, 'Industry', 100),
+    contactPerson: text(body.contactPerson, 'Contact person', 200),
+    email: text(body.email, 'Email', 200),
+    phone: text(body.phone, 'Phone', 50),
+    status: oneOf(body.status, CLIENT_STATUSES, 'status'),
+    notes: text(body.notes, 'Notes', 5000),
+    website: body.website ? httpUrl(body.website, 'Website') : text(body.website, 'Website', 0),
+  };
+  if (isAdmin) fields.totalBilled = amount(body.totalBilled, 'Total billed');
+  if (fields.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fields.email)) throw new HttpError(400, 'Enter a valid email');
+  return Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined));
+}
+
+app.post(
+  '/api/clients',
+  authMiddleware,
+  requireRole(['admin', 'pm']),
+  route((req, res) => {
+    const fields = clientFields(req.body ?? {}, req.user!.role === 'admin');
+    if (!fields.name || !fields.email) throw new HttpError(400, 'Client name and email are required');
+
+    const newClient: Client = {
+      id: newId('cli'),
+      name: fields.name,
+      company: fields.company || fields.name,
+      industry: fields.industry || 'Technology',
+      contactPerson: fields.contactPerson || 'Primary Contact',
+      email: fields.email,
+      phone: fields.phone || '',
+      status: fields.status || 'active',
+      totalBilled: fields.totalBilled ?? 0,
+      activeProjectsCount: 0,
+      notes: fields.notes || '',
+      website: fields.website || '',
+    };
+
+    db.getData().clients.unshift(newClient);
+    db.save();
+    res.status(201).json(newClient);
+  })
+);
+
+app.put(
+  '/api/clients/:id',
+  authMiddleware,
+  requireRole(['admin', 'pm']),
+  route((req, res) => {
+    const database = db.getData();
+    const client = database.clients.find((c) => c.id === param(req, 'id'));
+    if (!client) throw new HttpError(404, 'Client not found');
+
+    const fields = clientFields(req.body ?? {}, req.user!.role === 'admin');
+    if (fields.name === '' || fields.email === '') throw new HttpError(400, 'Client name and email are required');
+    Object.assign(client, fields);
+
+    if (fields.name) {
+      for (const p of database.projects) if (p.clientId === client.id) p.clientName = client.name;
+    }
+
+    db.save();
+    res.json({
+      ...client,
+      activeProjectsCount: database.projects.filter((p) => p.clientId === client.id && p.status === 'active').length,
+    });
+  })
+);
+
+// ==========================================
+// GLOBAL TASKS & DASHBOARD STATS
+// ==========================================
+
+function visibleProjectIds(user: User): Set<string> {
+  return new Set(
+    db
+      .getData()
+      .projects.filter((p) => canUserViewProject(user, p))
+      .map((p) => p.id)
+  );
+}
+
+app.get('/api/tasks/global', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
+  const user = req.user!;
+  const { filter, status } = req.query;
+  const allowed = visibleProjectIds(user);
+
+  let tasks = db.getData().tasks.filter((t) => allowed.has(t.projectId));
+
+  if (filter === 'assigned_to_me') {
+    tasks = tasks.filter((t) => t.assigneeId === user.id);
+  }
+
+  if (status && status !== 'all') {
+    tasks = tasks.filter((t) => t.status === status);
+  }
+
+  res.json(tasks);
+});
+
+app.get('/api/dashboard/stats', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
+  const user = req.user!;
+  const database = db.getData();
+
+  const visibleProjects = database.projects.filter((p) => canUserViewProject(user, p));
+  const visibleIds = new Set(visibleProjects.map((p) => p.id));
+  const accessibleTasks = database.tasks.filter((t) => visibleIds.has(t.projectId));
+  const myTasks = accessibleTasks.filter((t) => t.assigneeId === user.id);
+
+  const pendingMilestones = database.milestones
+    .filter((m) => visibleIds.has(m.projectId) && m.status !== 'completed')
+    .sort((a, b) => a.targetDate.localeCompare(b.targetDate))
+    .slice(0, 5);
+
+  const priorityRank = { urgent: 0, high: 1, medium: 2, low: 3 };
+  const urgentTasks = accessibleTasks
+    .filter((t) => t.status !== 'done' && (t.priority === 'urgent' || t.priority === 'high'))
+    .sort((a, b) => priorityRank[a.priority] - priorityRank[b.priority] || a.dueDate.localeCompare(b.dueDate))
+    .slice(0, 6);
+
+  res.json({
+    activeProjectsCount: visibleProjects.filter((p) => p.status === 'active').length,
+    completedProjectsCount: visibleProjects.filter((p) => p.status === 'completed').length,
+    totalProjectsCount: visibleProjects.length,
+    totalBudget: visibleProjects.reduce((sum, p) => sum + (p.budget || 0), 0),
+    totalSpent: visibleProjects.reduce((sum, p) => sum + (p.spent || 0), 0),
+    totalEmployees: database.users.length,
+    activeClientsCount: database.clients.filter((c) => c.status === 'active').length,
+    myPendingTasksCount: myTasks.filter((t) => t.status !== 'done').length,
+    allPendingTasksCount: accessibleTasks.filter((t) => t.status !== 'done').length,
+    pendingMilestones,
+    urgentTasks,
+    recentProjects: [...visibleProjects]
+      .filter((p) => p.status !== 'archived')
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      .slice(0, 4),
+  });
+});
+
+// ==========================================
+// NOTIFICATIONS
+// ==========================================
+
+app.get('/api/notifications', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
+  const notifs = db
+    .getData()
+    .notifications.filter((n) => n.userId === req.user!.id)
+    .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+  res.json(notifs);
+});
+
+app.post('/api/notifications/read-all', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
+  for (const n of db.getData().notifications) {
+    if (n.userId === req.user!.id) n.read = true;
+  }
+  db.save();
+  res.json({ success: true });
+});
+
+app.post('/api/notifications/:id/read', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
+  const notif = db.getData().notifications.find((n) => n.id === param(req, 'id') && n.userId === req.user!.id);
+  if (!notif) {
+    res.status(404).json({ error: 'Notification not found' });
+    return;
+  }
+  notif.read = true;
+  db.save();
+  res.json({ success: true });
+});
+
+// Reset the database to seed data. Admin-only, and never available in production.
+app.post('/api/system/reset', authMiddleware, requireRole(['admin']), (req, res) => {
+  if (IS_PROD) {
+    res.status(404).json({ error: 'Not found' });
+    return;
+  }
+  db.resetToDefault();
+  res.json({ message: 'Database reset to initial seed state' });
+});
+
+app.use('/api', (req, res) => {
+  res.status(404).json({ error: 'Not found' });
+});
+
+// In production the server also serves the built client
+const DIST_DIR = path.resolve(process.cwd(), 'dist');
+if (IS_PROD && fs.existsSync(DIST_DIR)) {
+  app.use(express.static(DIST_DIR));
+  app.get(/^(?!\/api).*/, (req, res) => res.sendFile(path.join(DIST_DIR, 'index.html')));
+}
+
+// JSON error handler (validation errors, upload limits, unexpected failures)
+app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
+  if (err instanceof HttpError) {
+    res.status(err.status).json({ error: err.message });
+    return;
+  }
+  if (err instanceof multer.MulterError) {
+    const message =
+      err.code === 'LIMIT_FILE_SIZE' ? `Files must be ${MAX_UPLOAD_BYTES / (1024 * 1024)} MB or smaller` : err.message;
+    res.status(err.code === 'LIMIT_FILE_SIZE' ? 413 : 400).json({ error: message });
+    return;
+  }
+  if (err?.type === 'entity.parse.failed') {
+    res.status(400).json({ error: 'Malformed JSON body' });
+    return;
+  }
+  console.error(err);
+  res.status(500).json({ error: 'Something went wrong on the server' });
+});
+
+// Start listening if not running in test mode
+// One automatic backup a day: checked at start-up and then every hour
+function runDailyBackup() {
+  const newest = listBackups().find((b) => !/-[a-z]+\.db$/.test(b.name));
+  if (newest && Date.now() - Date.parse(newest.createdAt) < 23 * 3600 * 1000) return;
+  try {
+    const info = db.backup();
+    console.log(`Backup saved: ${info.name}`);
+  } catch (err) {
+    console.error('Automatic backup failed:', err);
+  }
+}
+
+if (process.env.NODE_ENV !== 'test') {
+  if (IS_PROD && !fs.existsSync(path.join(DIST_DIR, 'index.html'))) {
+    console.warn('No built app found in dist/. Run "npm run build" before "npm start".');
+  }
+  runDailyBackup();
+  setInterval(runDailyBackup, 3600 * 1000).unref();
+
+  const server = app.listen(PORT, () => {
+    console.log(`NovaDesk server running on port ${PORT} (process ${process.pid})`);
+  });
+  server.on('error', (err: NodeJS.ErrnoException) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`
+Port ${PORT} is already in use by another program. Stop it, or set PORT to a free port.
+`);
+      process.exit(1);
+    }
+    throw err;
+  });
+}

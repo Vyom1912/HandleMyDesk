@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.env
+
+# Runtime data: database, uploaded files and the dev token-signing secret
+data/*.db
+data/*.db-*
+data/db.json*
+data/uploads/
+data/backups/
+data/.jwt-secret
+data/server.lock

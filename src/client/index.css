@@ -1,0 +1,205 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens. Components only use these semantic names (bg-canvas, text-fg, border-line…),
+ * so light and dark themes are a matter of swapping the variables below.
+ */
+@theme inline {
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "Cascadia Mono", Consolas, "Liberation Mono", monospace;
+
+  --color-canvas: var(--canvas);
+  --color-sidebar: var(--sidebar);
+  --color-surface: var(--surface);
+  --color-subtle: var(--subtle);
+  --color-hover: var(--hover);
+  --color-selected: var(--selected);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-faint: var(--fg-faint);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-ink: var(--accent-ink);
+  --color-on-accent: var(--on-accent);
+  --color-danger: var(--danger);
+  --color-danger-hover: var(--danger-hover);
+  --color-overlay: var(--overlay);
+
+  --color-tone-gray-bg: var(--tone-gray-bg);
+  --color-tone-gray-fg: var(--tone-gray-fg);
+  --color-tone-blue-bg: var(--tone-blue-bg);
+  --color-tone-blue-fg: var(--tone-blue-fg);
+  --color-tone-green-bg: var(--tone-green-bg);
+  --color-tone-green-fg: var(--tone-green-fg);
+  --color-tone-amber-bg: var(--tone-amber-bg);
+  --color-tone-amber-fg: var(--tone-amber-fg);
+  --color-tone-orange-bg: var(--tone-orange-bg);
+  --color-tone-orange-fg: var(--tone-orange-fg);
+  --color-tone-red-bg: var(--tone-red-bg);
+  --color-tone-red-fg: var(--tone-red-fg);
+}
+
+:root,
+:root[data-theme="light"] {
+  color-scheme: light;
+  --canvas: #ffffff;
+  --sidebar: #f8f8f7;
+  --surface: #ffffff;
+  --subtle: #f6f6f5;
+  --hover: #efefee;
+  --selected: #e9e9e7;
+  --line: #e7e7e5;
+  --line-strong: #d5d5d2;
+  --fg: #1f1f1e;
+  --fg-muted: #5c5b58;
+  --fg-faint: #75746f;
+  --accent: #2b63d9;
+  --accent-hover: #2253bb;
+  --accent-soft: #edf2fd;
+  --accent-ink: #1f4fae;
+  --on-accent: #ffffff;
+  --danger: #c4321f;
+  --danger-hover: #a92a1a;
+  --overlay: rgb(15 15 15 / 0.32);
+
+  --tone-gray-bg: #efefed;
+  --tone-gray-fg: #55544f;
+  --tone-blue-bg: #e7effc;
+  --tone-blue-fg: #2250a8;
+  --tone-green-bg: #e5f3ea;
+  --tone-green-fg: #1d6d40;
+  --tone-amber-bg: #fbf0d9;
+  --tone-amber-fg: #7d5200;
+  --tone-orange-bg: #fcebdd;
+  --tone-orange-fg: #a1420c;
+  --tone-red-bg: #fbe7e4;
+  --tone-red-fg: #a8271a;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --canvas: #191919;
+  --sidebar: #202020;
+  --surface: #1f1f1f;
+  --subtle: #232323;
+  --hover: #2a2a2a;
+  --selected: #303030;
+  --line: #2e2e2e;
+  --line-strong: #3d3d3d;
+  --fg: #ebebea;
+  --fg-muted: #ababa7;
+  --fg-faint: #8c8b87;
+  --accent: #4a86f0;
+  --accent-hover: #6b9cf3;
+  --accent-soft: #1d2840;
+  --accent-ink: #9bbcf8;
+  --on-accent: #ffffff;
+  --danger: #d4483a;
+  --danger-hover: #e05f52;
+  --overlay: rgb(0 0 0 / 0.55);
+
+  --tone-gray-bg: #2e2e2e;
+  --tone-gray-fg: #bdbcb8;
+  --tone-blue-bg: #1d2a42;
+  --tone-blue-fg: #93b6f6;
+  --tone-green-bg: #1b3326;
+  --tone-green-fg: #79c99a;
+  --tone-amber-bg: #372d17;
+  --tone-amber-fg: #e2b55c;
+  --tone-orange-bg: #3a2517;
+  --tone-orange-fg: #ef9f6b;
+  --tone-red-bg: #3c1f1c;
+  --tone-red-fg: #f08b80;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  background-color: var(--canvas);
+  color: var(--fg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+/* Quiet scrollbars that match the theme */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 9999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Visible keyboard focus everywhere; in the base layer so components with their own focus style win */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+    border-radius: 4px;
+  }
+}
+
+/* Native date pickers follow the theme */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  opacity: 0.6;
+}
+:root[data-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-fade-in {
+  animation: fadeIn 0.14s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
