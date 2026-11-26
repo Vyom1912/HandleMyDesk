@@ -3,7 +3,9 @@ import path from 'path';
 import os from 'os';
 import { DatabaseSync } from 'node:sqlite';
 import bcrypt from 'bcryptjs';
-import { IS_TEST, IS_PROD, DATA_DIR, DB_PATH, LEGACY_DB_PATH, LOCK_FILE } from './paths';
+import crypto from 'crypto';
+import { AsyncLocalStorage } from 'async_hooks';
+import { IS_TEST, IS_PROD, DATA_DIR, DB_PATH, LEGACY_DB_PATH, LOCK_FILE, BACKUP_DIR } from './paths';
 import { createBackup, pruneBackups, BackupInfo } from './backups';
 import {
   User,
@@ -1278,10 +1280,19 @@ export function initialsOf(name: string): string {
  * A fresh production install starts empty (no demo accounts with a known password) and
  * creates its first administrator from INITIAL_ADMIN_* settings in .env.
  */
-function bootstrapAdminFromEnv(): { user: User; password: string } {
-  const name = process.env.INITIAL_ADMIN_NAME?.trim();
-  const email = process.env.INITIAL_ADMIN_EMAIL?.trim().toLowerCase();
-  const password = process.env.INITIAL_ADMIN_PASSWORD ?? '';
+export interface FirstAdmin {
+  name: string;
+  email: string;
+  password: string;
+}
+
+function bootstrapAdminFromEnv(given?: FirstAdmin): { user: User; password: string } {
+  const name = (given?.name ?? process.env.INITIAL_ADMIN_NAME)?.trim();
+  const email = (given?.email ?? process.env.INITIAL_ADMIN_EMAIL)?.trim().toLowerCase();
+  const password = given?.password ?? process.env.INITIAL_ADMIN_PASSWORD ?? '';
+  if (given && (!name || !email || password.length < 8)) {
+    throw new Error('The first administrator needs a name, an email and a password of 8+ characters');
+  }
   if (!name || !email || password.length < 8) {
     console.error(
       '\nThis is a new installation with an empty database.\n' +
@@ -1394,8 +1405,15 @@ export class Database {
   // Last persisted "pos|json" per row, used to find what changed on save()
   private persisted = new Map<CollectionKey, Map<string, string>>();
 
-  constructor(file: string = DB_FILE) {
-    if (!IS_TEST) fs.mkdirSync(DATA_DIR, { recursive: true });
+  // Where this office's backups go
+  public readonly backupDir: string;
+  // Set for a brand-new office: its first administrator (instead of demo data or .env settings)
+  private readonly firstAdmin?: FirstAdmin;
+
+  constructor(file: string = DB_FILE, opts: { backupDir?: string; firstAdmin?: FirstAdmin } = {}) {
+    this.backupDir = opts.backupDir ?? BACKUP_DIR;
+    this.firstAdmin = opts.firstAdmin;
+    if (!IS_TEST) fs.mkdirSync(file === ':memory:' ? DATA_DIR : path.dirname(file), { recursive: true });
     this.sql = new DatabaseSync(file);
     if (!IS_TEST) this.sql.exec('PRAGMA journal_mode = WAL;');
     for (const c of COLLECTIONS) {
@@ -1410,7 +1428,7 @@ export class Database {
 
     // Existing data gets a safety copy before it's changed
     if (pending.length && existingUsers > 0 && file !== ':memory:') {
-      const info = createBackup(this.sql, 'premigrate');
+      const info = createBackup(this.sql, 'premigrate', this.backupDir);
       console.log(`Saved ${info.name} before updating the database`);
     }
 
@@ -1434,6 +1452,15 @@ export class Database {
 
   private load() {
     const { n } = this.sql.prepare('SELECT COUNT(*) AS n FROM users').get() as { n: number };
+    if (n === 0 && this.firstAdmin) {
+      const { user, password } = bootstrapAdminFromEnv(this.firstAdmin);
+      user.id = `emp-${crypto.randomUUID().slice(0, 8)}`;
+      this.data = emptySchema();
+      this.data.users.push(user);
+      this.save();
+      this.setPasswordHash(user.id, bcrypt.hashSync(password, 10), { mustChange: true });
+      return;
+    }
     if (n === 0) {
       const legacy = this.importLegacyJson();
       if (legacy || SEED_DEMO) {
@@ -1547,8 +1574,8 @@ export class Database {
   }
 
   public backup(label?: string): BackupInfo {
-    const info = createBackup(this.sql, label);
-    pruneBackups();
+    const info = createBackup(this.sql, label, this.backupDir);
+    pruneBackups(undefined, this.backupDir);
     return info;
   }
 
@@ -1644,4 +1671,57 @@ if (!IS_TEST) {
   renameLegacyDatabase();
 }
 
-export const db = new Database();
+/*
+ * OFFICES. Every customer office has its own Database (its own SQLite file, uploads and backups).
+ * Each request runs "inside" one office, chosen from the sign-in token (see platform.ts), and
+ * `db` always means the current office's database. Outside a request (tests, scripts, start-up)
+ * it means the main office: the original installation.
+ */
+export interface Tenant {
+  id: string;
+  db: Database;
+  uploadsDir: string;
+  backupDir: string;
+}
+
+export const MAIN_TENANT_ID = 'main';
+const tenantStore = new AsyncLocalStorage<Tenant>();
+export const MAIN_TENANT: Tenant = { id: MAIN_TENANT_ID, db: new Database(), uploadsDir: UPLOADS_DIR, backupDir: BACKUP_DIR };
+
+// Once the server is serving, work that doesn't know its office is refused instead of quietly
+// using the main office's data (see requireOfficeContext).
+let strict = false;
+
+/**
+ * From now on, reading or writing data without an office throws. The server turns this on before it
+ * starts serving, so a mistake in the code fails loudly instead of touching the wrong office.
+ */
+export function requireOfficeContext(on = true) {
+  strict = on;
+}
+
+export class NoOfficeError extends Error {
+  constructor() {
+    super('No office selected for this work; refusing to use the main office by default');
+  }
+}
+
+export function currentTenant(): Tenant {
+  const tenant = tenantStore.getStore();
+  if (tenant) return tenant;
+  if (strict) throw new NoOfficeError();
+  return MAIN_TENANT;
+}
+
+/** Runs fn (and everything it awaits) inside an office. */
+export function runInTenant<T>(tenant: Tenant, fn: () => T): T {
+  return tenantStore.run(tenant, fn);
+}
+
+export const db: Database = new Proxy({} as Database, {
+  get(_target, prop) {
+    const target = currentTenant().db;
+    const value = (target as any)[prop];
+    return typeof value === 'function' ? value.bind(target) : value;
+  },
+});

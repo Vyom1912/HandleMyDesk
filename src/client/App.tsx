@@ -1,5 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { AlertTriangle, RefreshCw, LogOut } from 'lucide-react';
+import { AlertTriangle, RefreshCw, LogOut, LifeBuoy } from 'lucide-react';
+import { SupportModal } from './components/modals/SupportModal';
+import { useOffice } from './services/office';
+import { tokenClaims, returnToOwnerConsole } from './services/api';
 import { useApp } from './context/AppContext';
 import { Sidebar } from './components/layout/Sidebar';
 import { BottomNav } from './components/layout/BottomNav';
@@ -58,6 +61,23 @@ const ConnectionNotice: React.FC = () => {
     <div role="status" className="fixed top-3 left-1/2 -translate-x-1/2 z-[60] flex items-center gap-2 h-8 px-3 rounded-full bg-fg text-canvas text-[13px] shadow-lg animate-fade-in">
       <span className="w-2 h-2 rounded-full bg-tone-amber-bg animate-pulse" aria-hidden="true" />
       {connection === 'offline' ? "You're offline. Changes can't be saved until the connection is back." : 'Reconnecting… live updates are paused.'}
+    </div>
+  );
+};
+
+// While the HandleMyDesk owner works inside this office as support
+const SupportVisitBanner: React.FC = () => {
+  const office = useOffice(tokenClaims().sup !== undefined);
+  if (!office?.supportVisit) return null;
+  return (
+    <div role="status" className="fixed bottom-[calc(4rem+env(safe-area-inset-bottom))] lg:bottom-4 left-1/2 -translate-x-1/2 z-[60] flex items-center gap-3 max-w-[calc(100vw-2rem)] pl-4 pr-1.5 py-1.5 rounded-full bg-fg text-canvas text-[13px] shadow-lg">
+      <LifeBuoy size={15} className="shrink-0" />
+      <span className="truncate">
+        Support visit: <strong>{office.name}</strong>
+      </span>
+      <button onClick={returnToOwnerConsole} className="shrink-0 h-8 px-3 rounded-full bg-canvas text-fg font-medium hover:opacity-90">
+        Back to owner console
+      </button>
     </div>
   );
 };
@@ -156,6 +176,8 @@ export const App: React.FC = () => {
       <NotificationsDrawer />
       <ShortcutsModal />
       <ConnectionNotice />
+      <SupportModal />
+      <SupportVisitBanner />
       <ConfirmDialog />
       <ToastBanner />
     </div>

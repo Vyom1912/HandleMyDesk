@@ -3,7 +3,7 @@ import path from 'path';
 import crypto from 'crypto';
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { db, DATA_DIR } from './db';
+import { db, DATA_DIR, currentTenant, MAIN_TENANT_ID } from './db';
 import { User, Project } from '../types';
 
 function resolveJwtSecret(): string {
@@ -33,9 +33,12 @@ export interface AuthenticatedRequest extends Request {
 
 // Tokens carry the user's session version; bumping it (password change, reset, deactivation,
 // "sign out everywhere") makes every token issued before that point stop working.
-export function generateToken(user: User): string {
+// `cid` is the office the person belongs to; `sup` marks a HandleMyDesk support visit (owner id).
+export function generateToken(user: User, opts: { support?: string } = {}): string {
   const { sessionVersion } = db.getAuthState(user.id);
-  return jwt.sign({ id: user.id, sv: sessionVersion }, JWT_SECRET, { expiresIn: '7d' });
+  const claims: Record<string, unknown> = { id: user.id, sv: sessionVersion, cid: currentTenant().id };
+  if (opts.support) claims.sup = opts.support;
+  return jwt.sign(claims, JWT_SECRET, { expiresIn: opts.support ? '8h' : '7d' });
 }
 
 // The only calls allowed until a temporary password has been replaced
@@ -51,7 +54,9 @@ export function authMiddleware(req: AuthenticatedRequest, res: Response, next: N
   let userId: string;
   let tokenVersion: number;
   try {
-    const decoded = jwt.verify(authHeader.substring(7), JWT_SECRET) as { id: string; sv?: number };
+    const decoded = jwt.verify(authHeader.substring(7), JWT_SECRET) as { id: string; sv?: number; cid?: string; kind?: string };
+    // Owner tokens are for the owner console only; office tokens only work in their own office
+    if (decoded.kind === 'owner' || (decoded.cid ?? MAIN_TENANT_ID) !== currentTenant().id) throw new Error('wrong office');
     userId = decoded.id;
     tokenVersion = decoded.sv ?? 0;
   } catch {

@@ -150,9 +150,11 @@ export const ClientsView: React.FC = () => {
                   </div>
                   <div className="hidden lg:block min-w-0">
                     <div className="text-[13px] text-fg truncate">{client.contactPerson}</div>
-                    <a href={`mailto:${client.email}`} className="block text-xs text-fg-faint truncate hover:text-accent-ink hover:underline underline-offset-2">
-                      {client.email}
-                    </a>
+                    {client.email && (
+                      <a href={`mailto:${client.email}`} className="block text-xs text-fg-faint truncate hover:text-accent-ink hover:underline underline-offset-2">
+                        {client.email}
+                      </a>
+                    )}
                   </div>
                   <span className="justify-self-end lg:justify-self-start">
                     <StatusBadge status={client.status} />
@@ -181,7 +183,8 @@ export const ClientsView: React.FC = () => {
                   {/* Compact details on smaller screens */}
                   <div className="lg:hidden col-span-2 flex items-center justify-between gap-2 text-xs text-fg-faint">
                     <span className="truncate">
-                      {client.contactPerson} · {clientProjects.length} project{clientProjects.length === 1 ? '' : 's'} · ${client.totalBilled.toLocaleString()}
+                      {client.contactPerson && `${client.contactPerson} · `}
+                      {clientProjects.length} project{clientProjects.length === 1 ? '' : 's'} · ${client.totalBilled.toLocaleString()}
                     </span>
                     {canEdit && (
                       <button onClick={() => openEditor(client)} className="text-fg-muted hover:text-fg shrink-0">
@@ -234,8 +237,8 @@ export const ClientsView: React.FC = () => {
             <Field label="Primary contact">
               <input className={inputClass} value={form.contactPerson} onChange={(e) => set({ contactPerson: e.target.value })} />
             </Field>
-            <Field label="Email" required>
-              <input type="email" required className={inputClass} value={form.email} onChange={(e) => set({ email: e.target.value })} />
+            <Field label="Email">
+              <input type="email" className={inputClass} value={form.email} onChange={(e) => set({ email: e.target.value })} />
             </Field>
             <Field label="Phone">
               <input type="tel" className={inputClass} value={form.phone} onChange={(e) => set({ phone: e.target.value })} />

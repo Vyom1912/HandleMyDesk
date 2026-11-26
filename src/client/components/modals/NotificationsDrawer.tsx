@@ -6,13 +6,75 @@ import { NotificationItem, NotificationKind, NOTIFICATION_KINDS } from '../../..
 import { api } from '../../services/api';
 import { markOnboarding } from '../../services/onboarding';
 import { DOT, timeAgo } from '../ui/Badges';
-import { Segmented, toolbarSelectClass } from '../ui/Field';
+import { Segmented, toolbarSelectClass, Button } from '../ui/Field';
+import { getPushState, turnOnPush, turnOffPush, PushState } from '../../services/push';
+import { openSupport } from '../../services/office';
 
 const TYPE_DOT: Record<NotificationItem['type'], string> = {
   success: DOT.green,
   alert: DOT.red,
   warning: DOT.amber,
   info: DOT.blue,
+};
+
+const PUSH_TEXT: Record<PushState, string> = {
+  unsupported: "This browser can't show notifications when HandleMyDesk is closed. Try Chrome, Edge, Firefox or Safari.",
+  'needs-install': 'On iPhone and iPad: tap Share, then "Add to Home Screen", open HandleMyDesk from the new icon and turn this on there.',
+  'server-off': 'Not set up on this server yet. Ask your administrator.',
+  blocked: 'Blocked in your browser or phone settings. Allow notifications for this site there, then come back.',
+  off: 'Get alerts on this device even when HandleMyDesk is closed.',
+  on: 'On for this device.',
+};
+
+/** Phone/desktop notifications for this device. */
+const DeviceAlerts: React.FC = () => {
+  const { showToast } = useApp();
+  const [state, setState] = useState<PushState | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    getPushState()
+      .then(setState)
+      .catch(() => setState('unsupported'));
+  }, []);
+
+  const run = async (fn: () => Promise<PushState | void>, success?: string) => {
+    setBusy(true);
+    try {
+      const next = await fn();
+      if (next) setState(next);
+      if (success) showToast(success, 'success');
+    } catch (err: any) {
+      showToast(err.message || 'Something went wrong', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="mb-5 p-3 rounded-lg border border-line">
+      <h3 className="text-sm font-semibold text-fg">Phone and computer alerts</h3>
+      <p className="text-[13px] text-fg-muted mt-0.5">{state ? PUSH_TEXT[state] : 'Checking…'}</p>
+      {(state === 'off' || state === 'on') && (
+        <div className="flex flex-wrap gap-2 mt-2.5">
+          {state === 'off' ? (
+            <Button disabled={busy} onClick={() => run(turnOnPush)}>
+              {busy ? 'Turning on…' : 'Turn on for this device'}
+            </Button>
+          ) : (
+            <>
+              <Button variant="secondary" disabled={busy} onClick={() => run(async () => void (await api.post('/api/push/test')), 'Test sent. It should appear in a few seconds.')}>
+                Send a test
+              </Button>
+              <Button variant="secondary" disabled={busy} onClick={() => run(turnOffPush)}>
+                Turn off
+              </Button>
+            </>
+          )}
+        </div>
+      )}
+    </section>
+  );
 };
 
 /** Which notifications this person wants to receive. */
@@ -45,6 +107,7 @@ const Preferences: React.FC<{ onBack: () => void }> = ({ onBack }) => {
       <button onClick={onBack} className="flex items-center gap-1.5 h-10 pointer-fine:h-7 px-1.5 -ml-1.5 rounded-md text-[13px] text-fg-muted hover:text-fg hover:bg-hover mb-3">
         <ArrowLeft size={14} /> Back to inbox
       </button>
+      <DeviceAlerts />
       <h3 className="text-sm font-semibold text-fg">Notify me about</h3>
       <p className="text-[13px] text-fg-muted mt-0.5 mb-3">Turned-off kinds won't appear in your inbox. Changes save straight away.</p>
       {!muted ? (
@@ -98,6 +161,12 @@ export const NotificationsDrawer: React.FC = () => {
 
   const handleOpen = (notif: NotificationItem) => {
     if (!notif.read) markNotificationRead(notif.id);
+    // Replies from HandleMyDesk open "Report a problem"
+    if (notif.kind === 'support' && !notif.projectId) {
+      close();
+      openSupport();
+      return;
+    }
     if (notif.projectId) {
       openProject(notif.projectId, notif.taskId ? 'tasks' : undefined, notif.taskId);
       close();

@@ -68,6 +68,22 @@ describe('Project templates', () => {
     expect(tasks.every((t) => t.assigneeId === 'emp-2')).toBe(true);
   });
 
+  it('creates the client from a typed name, or reuses an existing client with the same name', async () => {
+    const before = db.getData().clients.length;
+    const created = await request(app).post('/api/projects').set(as('emp-2')).send({ name: 'Bakery site', clientName: 'Sunrise Bakery' });
+    expect(created.status).toBe(201);
+    expect(created.body.clientName).toBe('Sunrise Bakery');
+    expect(db.getData().clients.length).toBe(before + 1);
+
+    const again = await request(app).post('/api/projects').set(as('emp-2')).send({ name: 'Bakery app', clientName: '  sunrise bakery ' });
+    expect(again.status).toBe(201);
+    expect(again.body.clientId).toBe(created.body.clientId);
+    expect(db.getData().clients.length).toBe(before + 1);
+
+    expect((await request(app).post('/api/projects').set(as('emp-2')).send({ name: 'No client' })).status).toBe(400);
+    expect((await request(app).post('/api/clients').set(as('emp-2')).send({ name: 'No email yet' })).status).toBe(201);
+  });
+
   it('a lead saves their project as a template; only they or an admin can delete it; built-ins cannot be', async () => {
     const saved = await request(app).post('/api/projects/prj-1/save-as-template').set(as('emp-3')).send({ name: 'Brand refresh' });
     expect(saved.status).toBe(201);

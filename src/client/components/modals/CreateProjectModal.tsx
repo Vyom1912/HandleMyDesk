@@ -17,7 +17,7 @@ export const CreateProjectModal: React.FC = () => {
   const [templateId, setTemplateId] = useState('');
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
-  const [clientId, setClientId] = useState('');
+  const [clientName, setClientName] = useState('');
   const [category, setCategory] = useState('');
   const [priority, setPriority] = useState<Project['priority']>('medium');
   const [budget, setBudget] = useState('25000');
@@ -37,12 +37,20 @@ export const CreateProjectModal: React.FC = () => {
       .catch(() => setTemplates([]));
     api
       .get<Client[]>('/api/clients')
-      .then((data) => {
-        setClients(data);
-        setClientId((prev) => prev || data[0]?.id || '');
-      })
+      .then(setClients)
       .catch((err) => setError(err.message));
   }, [isCreateProjectOpen, currentUser]);
+
+  // A typed name that matches an existing client uses that client; anything else becomes a new client
+  const typedClient = clientName.trim();
+  const existingClient = clients.find((c) => c.name.trim().toLowerCase() === typedClient.toLowerCase());
+  const clientHint = !typedClient
+    ? clients.length > 0
+      ? 'Pick an existing client or type a new name.'
+      : 'Type the client’s name. It will be added to Clients.'
+    : existingClient
+      ? `Existing client${existingClient.company && existingClient.company !== existingClient.name ? ` · ${existingClient.company}` : ''}`
+      : `“${typedClient}” is new and will be added to Clients.`;
 
   const chosen = templates.find((t) => t.id === templateId);
   const builtIn = templates.filter((t) => t.builtIn);
@@ -59,7 +67,7 @@ export const CreateProjectModal: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (!name.trim() || !clientId) return setError('Enter a project name and choose a client');
+    if (!name.trim() || !typedClient) return setError('Enter a project name and a client');
     if (targetDate < startDate) return setError('Target date must be after the start date');
 
     try {
@@ -67,7 +75,7 @@ export const CreateProjectModal: React.FC = () => {
       const newProject = await api.post<Project>('/api/projects', {
         name: name.trim(),
         code: code.trim() || undefined,
-        clientId,
+        ...(existingClient ? { clientId: existingClient.id } : { clientName: typedClient }),
         category: category.trim() || undefined,
         priority,
         budget: Number(budget) || 0,
@@ -84,6 +92,7 @@ export const CreateProjectModal: React.FC = () => {
       showToast(`Created ${newProject.name}`, 'success');
 
       setName('');
+      setClientName('');
       setCode('');
       setCategory('');
       setDescription('');
@@ -155,14 +164,23 @@ export const CreateProjectModal: React.FC = () => {
         </Field>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Field label="Client" required>
-            <select value={clientId} onChange={(e) => setClientId(e.target.value)} className={selectClass}>
+          <Field label="Client" required hint={clientHint}>
+            <input
+              type="text"
+              required
+              list="project-client-options"
+              autoComplete="off"
+              placeholder="e.g. Acme Corp"
+              value={clientName}
+              onChange={(e) => setClientName(e.target.value)}
+              className={inputClass}
+              maxLength={200}
+            />
+            <datalist id="project-client-options">
               {clients.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
+                <option key={c.id} value={c.name} />
               ))}
-            </select>
+            </datalist>
           </Field>
           <Field label="Project code" hint="Leave blank to generate one">
             <input type="text" placeholder="e.g. MOB-500" value={code} onChange={(e) => setCode(e.target.value)} className={`${inputClass} font-mono uppercase placeholder:normal-case placeholder:font-sans`} maxLength={20} />

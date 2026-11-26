@@ -129,7 +129,7 @@ describe('Profile and project stage', () => {
     const png = Buffer.from('89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d4944415478da63f8ffff3f0005fe02fea7d6a4b40000000049454e44ae426082', 'hex');
     const up = await request(app).post('/api/auth/me/avatar').set(as('emp-5')).attach('avatar', png, { filename: 'me.png', contentType: 'image/png' });
     expect(up.status).toBe(200);
-    expect(up.body.avatar).toMatch(/^\/api\/avatars\/[0-9a-f-]{36}\.png$/);
+    expect(up.body.avatar).toMatch(/^\/api\/avatars\/main\/[0-9a-f-]{36}\.png$/);
     expect((await request(app).get(up.body.avatar)).status).toBe(200);
 
     const bad = await request(app).post('/api/auth/me/avatar').set(as('emp-5')).attach('avatar', Buffer.from('hello'), { filename: 'x.txt', contentType: 'text/plain' });

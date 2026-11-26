@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { User, UserWorkspace, Project, NotificationItem, AppEvent, ProjectSection, isSystemTab } from '../../types';
 import { api, getStoredToken, setStoredToken, openEventStream, UNAUTHORIZED_EVENT } from '../services/api';
+import { resyncPush, detachPushOnSignOut } from '../services/push';
 
 type ToastType = 'info' | 'success' | 'error';
 export interface Toast {
@@ -107,7 +108,7 @@ type AuthStatus = 'checking' | 'signed_out' | 'signed_in';
 interface AppContextType {
   authStatus: AuthStatus;
   currentUser: User | null;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string, officeId?: string) => Promise<void>;
   logout: () => void;
   // Set when the account still has a temporary password; the app asks for a new one first
   mustChangePassword: boolean;
@@ -301,6 +302,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   const logout = useCallback(() => {
+    // Stop this device getting the person's phone notifications (needs the token, so before clearing it)
+    void detachPushOnSignOut(getStoredToken());
     setStoredToken(null);
     setCurrentUser(null);
     setWorkspace(null);
@@ -311,9 +314,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setError(null);
   }, []);
 
-  const login = async (email: string, password: string) => {
-    const res = await api.post<{ user: User; token: string }>('/api/auth/login', { email, password });
+  const login = async (email: string, password: string, officeId?: string) => {
+    const res = await api.post<{ user: User; token: string; kind?: 'owner' }>('/api/auth/login', { email, password, officeId });
     setStoredToken(res.token);
+    // The HandleMyDesk owner gets the owner console instead of an office workspace
+    if (res.kind === 'owner') {
+      window.location.hash = '#/';
+      window.location.reload();
+      return;
+    }
     await loadInitialData();
   };
 
@@ -432,6 +441,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       refreshWorkspace();
     }
   };
+
+  // Phone notifications: re-link this device to whoever just signed in
+  useEffect(() => {
+    if (authStatus === 'signed_in' && currentUser && !mustChangePassword) void resyncPush();
+  }, [authStatus, currentUser?.id, mustChangePassword]);
 
   // ---------- Live updates ----------
   useEffect(() => {

@@ -159,6 +159,42 @@ Add the `SSO_*` variables from `.env.example` to **Render**, and set
 `SSO_REDIRECT_URL` = `https://<your-vercel-address>/api/auth/sso/callback`. Use the Vercel address,
 not Render's. Register the same URL in your identity provider (Microsoft Entra, Google, Okta…).
 
+## Offices and the owner console
+
+Each customer company is an **office** with its own database, uploads and backups. Offices never
+see each other. You, the HandleMyDesk owner, see all of them.
+
+1. On Render → **Environment**, add `OWNER_NAME`, `OWNER_EMAIL` and `OWNER_PASSWORD` (8+ characters).
+   Optionally `MAIN_OFFICE_NAME` for the first office's name. Use an email that isn't used inside any office.
+2. Sign in on the normal sign-in screen with that email. You get the **owner console**:
+   - **Offices:** add an office (you get its administrator's temporary password to send them),
+     pause or resume it, rename it, and **Open office** to work inside it as "HandleMyDesk Support".
+     The office's admins get a notification when you go in.
+   - **Problems:** what people sent with **Report a problem** (sidebar menu → Report a problem).
+     Only the person who reported it and you can see it. Your replies notify them.
+   - **Log:** everything owners did.
+3. Each person signs in with just their email and password; the app finds their office.
+   The same email may be used in different offices (offices never learn about each other's people);
+   if someone has the same email and password in two offices, they choose which office to open.
+
+Company sign-in (SSO) works for the first office only in this version.
+
+## Phone notifications
+
+1. On your computer, run `npx web-push generate-vapid-keys`. It prints a Public Key and a Private Key.
+2. On Render → your service → **Environment**, add `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY` with those
+   two values, then save. Never change them later: everyone's phones would stop getting alerts until
+   they turn alerts on again.
+3. Each person: open the app → bell icon → ⚙ settings → **Turn on for this device**.
+   On iPhone/iPad this only works after **Share → Add to Home Screen**, opening the app from that icon.
+
+## Keeping the free server awake
+
+`.github/workflows/keep-awake.yml` visits the server every 10 minutes so Render's free plan doesn't
+put it to sleep. You can see the runs under the repo's **Actions** tab. GitHub pauses scheduled jobs
+in a repo with no commits for 60 days; push anything (or click **Enable workflow**) to restart it.
+Delete the file if you move to a paid Render plan.
+
 ## Backups
 
 The server makes a daily backup into `/var/data/backups` on the Render disk. Render also takes a

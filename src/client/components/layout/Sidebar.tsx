@@ -27,7 +27,9 @@ import {
   Link2,
   Shield,
   Keyboard,
+  LifeBuoy,
 } from 'lucide-react';
+import { useOffice, openSupport } from '../../services/office';
 import { useApp, PageView, ThemePreference } from '../../context/AppContext';
 import { Project, ProjectSection } from '../../../types';
 import { Avatar, StatusDot } from '../ui/Badges';
@@ -69,6 +71,7 @@ const rowIdle = 'text-fg-muted hover:bg-hover hover:text-fg';
 const rowActive = 'bg-selected text-fg font-medium';
 
 export const Sidebar: React.FC = () => {
+  const office = useOffice();
   const {
     currentUser,
     projects,
@@ -209,7 +212,7 @@ export const Sidebar: React.FC = () => {
               H
             </span>
             <span className="flex-1 min-w-0 text-left">
-              <span className="block text-sm font-semibold text-fg truncate leading-tight">HandleMyDesk</span>
+              <span className="block text-sm font-semibold text-fg truncate leading-tight">{office?.name ?? 'HandleMyDesk'}</span>
               <span className="block text-xs text-fg-faint truncate leading-tight">{currentUser?.name}</span>
             </span>
             <ChevronsUpDown size={13} className="text-fg-faint shrink-0" />
@@ -298,6 +301,17 @@ export const Sidebar: React.FC = () => {
             >
               <Keyboard size={15} /> Keyboard shortcuts
               <kbd className="ml-auto text-[11px] text-fg-faint font-sans">?</kbd>
+            </button>
+            <button
+              role="menuitem"
+              onClick={() => {
+                setMenuOpen(false);
+                setMobileNavOpen(false);
+                openSupport();
+              }}
+              className={`${rowBase} ${rowIdle}`}
+            >
+              <LifeBuoy size={15} /> Report a problem
             </button>
             <button role="menuitem" onClick={logout} className={`${rowBase} ${rowIdle}`}>
               <LogOut size={15} /> Sign out

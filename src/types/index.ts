@@ -87,7 +87,15 @@ export interface UserWorkspace {
   favoriteProjectIds?: string[];
   // Notification kinds this person turned off
   mutedNotificationKinds?: NotificationKind[];
+  // Phones and computers that get push notifications (server only; never sent to the browser)
+  pushSubscriptions?: PushSubscriptionRecord[];
   updatedAt: string;
+}
+
+export interface PushSubscriptionRecord {
+  endpoint: string;
+  keys: { p256dh: string; auth: string };
+  createdAt?: string;
 }
 
 export type TaskStatus = 'backlog' | 'todo' | 'in_progress' | 'in_review' | 'done';
@@ -235,7 +243,73 @@ export const NOTIFICATION_KINDS = [
   { kind: 'status', label: 'Project status, stage and milestone changes' },
   { kind: 'deliverables', label: 'Deliverables I own' },
   { kind: 'team', label: 'Being added to a project' },
+  { kind: 'support', label: 'Replies from HandleMyDesk support' },
 ] as const;
+
+// ==========================================
+// OFFICES & HANDLEMYDESK OWNER CONSOLE
+// ==========================================
+
+export type OfficeStatus = 'active' | 'suspended';
+
+/** One customer company, as the HandleMyDesk owner sees it. */
+export interface OfficeSummary {
+  id: string;
+  name: string;
+  status: OfficeStatus;
+  notes: string;
+  createdAt: string;
+  people: number;
+  admins: Array<{ name: string; email: string }>;
+  activeProjects: number;
+  openTasks: number;
+  overdueTasks: number;
+  lastActivity: string | null;
+  openTickets: number;
+}
+
+export interface OwnerProfile {
+  id: string;
+  name: string;
+  email: string;
+}
+
+export type SupportCategory = 'people' | 'technical' | 'other';
+
+export interface SupportMessage {
+  id: string;
+  from: 'customer' | 'owner';
+  name: string;
+  text: string;
+  at: string;
+}
+
+/** "Report a problem": seen only by the person who reported it and the HandleMyDesk owner. */
+export interface SupportTicket {
+  id: string;
+  officeId: string;
+  officeName?: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  category: SupportCategory;
+  subject: string;
+  status: 'open' | 'resolved';
+  messages: SupportMessage[];
+  createdAt: string;
+  updatedAt: string;
+  unreadByOwner: boolean;
+  unreadByCustomer: boolean;
+}
+
+export interface OwnerLogEntry {
+  id: string;
+  at: string;
+  ownerName: string;
+  action: string;
+  officeId?: string;
+  officeName?: string;
+}
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number]['kind'];
 
 export interface TaskComment {

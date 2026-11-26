@@ -1,0 +1,17 @@
+# Render's free plan puts the server to sleep after 15 minutes without visitors. This visits it
+# every 10 minutes so it stays awake (and due-date reminders keep going out).
+# Not needed on a paid Render plan; delete this file then.
+name: Keep server awake
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch: # lets you run it by hand from the Actions tab
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Visit the health check
+        run: curl --fail --silent --show-error --retry 3 --retry-delay 20 --max-time 90 https://handlemydesk.onrender.com/api/health

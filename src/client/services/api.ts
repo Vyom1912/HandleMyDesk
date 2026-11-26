@@ -31,6 +31,49 @@ export function setStoredToken(token: string | null): void {
   }
 }
 
+/** What the sign-in token says (not verified here; the server checks it on every call). */
+export function tokenClaims(token = getStoredToken()): { kind?: string; cid?: string; sup?: string } {
+  try {
+    const part = token?.split('.')[1];
+    if (!part) return {};
+    return JSON.parse(atob(part.replace(/-/g, '+').replace(/_/g, '/')));
+  } catch {
+    return {};
+  }
+}
+
+export const isOwnerSession = () => tokenClaims().kind === 'owner';
+
+// While the HandleMyDesk owner works inside an office, their owner sign-in waits here
+const OWNER_TOKEN_KEY = 'handlemydesk_owner_token';
+
+/** Owner console → inside an office as support. */
+export function enterOfficeAsSupport(officeToken: string) {
+  const owner = getStoredToken();
+  try {
+    if (owner) sessionStorage.setItem(OWNER_TOKEN_KEY, owner);
+  } catch {
+    // Storage unavailable: the owner signs in again afterwards
+  }
+  setStoredToken(officeToken);
+  window.location.hash = '#/';
+  window.location.reload();
+}
+
+/** Inside an office as support → back to the owner console. */
+export function returnToOwnerConsole() {
+  let owner: string | null = null;
+  try {
+    owner = sessionStorage.getItem(OWNER_TOKEN_KEY);
+    sessionStorage.removeItem(OWNER_TOKEN_KEY);
+  } catch {
+    // Storage unavailable
+  }
+  setStoredToken(owner);
+  window.location.hash = '#/';
+  window.location.reload();
+}
+
 // Fired when the server rejects our token, so the app can return to the sign-in screen
 export const UNAUTHORIZED_EVENT = 'handlemydesk-unauthorized';
 
@@ -46,13 +89,15 @@ async function errorFrom(response: Response): Promise<Error> {
     window.dispatchEvent(new CustomEvent(UNAUTHORIZED_EVENT));
   }
   let message = response.statusText || 'An error occurred';
+  let data: any = null;
   try {
-    const data = await response.json();
+    data = await response.json();
     message = data.error || message;
   } catch {
     // Non-JSON error body
   }
-  return new Error(message);
+  // The full reply stays available for errors that carry more than a message (e.g. CHOOSE_OFFICE)
+  return Object.assign(new Error(message), { status: response.status, data });
 }
 
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {

@@ -8,8 +8,18 @@ import path from 'path';
 import bcrypt from 'bcryptjs';
 import multer from 'multer';
 import { v4 as uuidv4 } from 'uuid';
-import { db, UPLOADS_DIR, initialsOf } from './db';
-import { BACKUP_DIR, BACKUP_KEEP } from './paths';
+import { db, initialsOf, currentTenant, runInTenant, MAIN_TENANT_ID, requireOfficeContext } from './db';
+import { BACKUP_KEEP } from './paths';
+import {
+  tenantMiddleware,
+  keepTenant,
+  tenantOf,
+  getTenant,
+  allTenants,
+  findOfficeLogins,
+  findOwnerLogin,
+  registerPlatformRoutes,
+} from './platform';
 import { listBackups, isBackupName, backupPath } from './backups';
 import {
   authMiddleware,
@@ -26,6 +36,7 @@ import { addStream, removeStream, emitToUsers, closeStreamsFor } from './events'
 import { requestLogger, logServerError, LoggedRequest } from './logging';
 import { toCsv, csvFileName } from './csv';
 import { ssoRouter } from './sso';
+import { pushPublicKey, sendPush, addSubscription, removeSubscription, isValidSubscription } from './push';
 import { BUILT_IN_TEMPLATES, instantiateTemplate, templateFromProject } from './templates';
 import {
   Project,
@@ -95,6 +106,9 @@ app.use(express.json({ limit: '1mb' }));
 
 // One log line per request, with a request id that also goes back in the X-Request-Id header
 app.use(requestLogger);
+
+// Every request runs inside one office (customer company), chosen from its sign-in token
+app.use(tenantMiddleware);
 
 // ==========================================
 // HELPERS & VALIDATION
@@ -236,6 +250,9 @@ function notify(
     };
     database.notifications.unshift(notification);
     emitToUsers([userId], { type: 'notification', notification });
+    // Also to the person's phone/computer, even when the app is closed
+    const url = n.project ? `/#/p/${encodeURIComponent(n.project.id)}${n.taskId ? `/tasks/${encodeURIComponent(n.taskId)}` : ''}` : '/#/';
+    void sendPush(userId, { title: n.title, body: n.project ? `${n.project.name}: ${n.message}` : n.message, url, tag: notification.id });
     created++;
   }
   return created;
@@ -340,16 +357,37 @@ app.get('/api/health', (req, res) => {
 app.post(
   '/api/auth/login',
   route(async (req, res) => {
-    const email = text(req.body?.email, 'Email', 200, true)!.toLowerCase();
+    const email = text(req.body?.email, 'Email', 200, true)!.trim().toLowerCase();
     const password = typeof req.body?.password === 'string' ? req.body.password : '';
-    const user = db.getData().users.find((u) => u.email.toLowerCase() === email);
-    const hash = user ? db.getPasswordHash(user.id) : null;
-    const valid = !!hash && (await bcrypt.compare(password, hash));
 
-    if (!user || !valid) throw new HttpError(401, 'Incorrect email or password');
+    // The HandleMyDesk owner signs in on the same screen and gets the owner console
+    const owner = await findOwnerLogin(email, password);
+    if (owner) {
+      res.json({ kind: 'owner', ...owner });
+      return;
+    }
+
+    // Everyone else: find their office, then continue inside it
+    const matches = await findOfficeLogins(email, password);
+    if (matches.length === 0) throw new HttpError(401, 'Incorrect email or password');
+    // Rare: the same email and password in two offices. Only this person (who knows the password
+    // for both) sees the office names, and picks one.
+    const match = matches.length === 1 ? matches[0] : matches.find((m) => m.tenant.id === req.body?.officeId);
+    if (!match) {
+      res.status(409).json({
+        error: 'You have accounts in more than one office. Choose which one to open.',
+        code: 'CHOOSE_OFFICE',
+        offices: matches.map((m) => ({ id: m.tenant.id, name: m.officeName })),
+      });
+      return;
+    }
+    const { tenant, user, suspended } = match;
+    if (suspended) throw new HttpError(403, 'This office is paused. Please contact HandleMyDesk.');
     if (user.active === false) throw new HttpError(403, 'This account has been deactivated. Ask an administrator.');
 
-    res.json({ user, token: generateToken(user), mustChangePassword: db.getAuthState(user.id).mustChange });
+    runInTenant(tenant, () => {
+      res.json({ user, token: generateToken(user), mustChangePassword: db.getAuthState(user.id).mustChange });
+    });
   })
 );
 
@@ -549,7 +587,7 @@ app.post(
 // ==========================================
 
 app.get('/api/admin/backups', authMiddleware, requireRole(['admin']), (req, res) => {
-  res.json({ backups: listBackups(), directory: BACKUP_DIR, keep: BACKUP_KEEP });
+  res.json({ backups: listBackups(currentTenant().backupDir), directory: currentTenant().backupDir, keep: BACKUP_KEEP });
 });
 
 app.post(
@@ -568,7 +606,7 @@ app.get(
   route((req, res) => {
     const name = param(req, 'name');
     if (!isBackupName(name)) throw new HttpError(400, 'Invalid backup name');
-    const file = backupPath(name);
+    const file = backupPath(name, currentTenant().backupDir);
     if (!fs.existsSync(file)) throw new HttpError(404, 'Backup not found');
     res.download(file, name);
   })
@@ -592,6 +630,12 @@ app.get('/api/events', authMiddleware, (req: AuthenticatedRequest, res: Response
 // ==========================================
 // USER WORKSPACE & DESKTOP PROJECT TABS
 // ==========================================
+
+// Phone subscriptions stay on the server
+function publicWorkspace(ws: UserWorkspace): Omit<UserWorkspace, 'pushSubscriptions'> {
+  const { pushSubscriptions: _, ...rest } = ws;
+  return rest;
+}
 
 function ensureWorkspace(userId: string): UserWorkspace {
   const database = db.getData();
@@ -651,7 +695,7 @@ app.get('/api/workspace', authMiddleware, (req: AuthenticatedRequest, res: Respo
   }
   db.save();
 
-  res.json({ workspace, projectsMap: projectDetailsMap });
+  res.json({ workspace: publicWorkspace(workspace), projectsMap: projectDetailsMap });
 });
 
 // Update current user workspace tabs and active tab
@@ -688,6 +732,8 @@ app.put('/api/workspace', authMiddleware, (req: AuthenticatedRequest, res: Respo
   }
 
   const updatedWorkspace: UserWorkspace = {
+    // Keep everything else stored here (notification choices, phones)
+    ...database.workspaces[user.id],
     id: `ws-${user.id}`,
     userId: user.id,
     tabs: sanitizedTabs,
@@ -699,7 +745,7 @@ app.put('/api/workspace', authMiddleware, (req: AuthenticatedRequest, res: Respo
   database.workspaces[user.id] = updatedWorkspace;
   db.save();
 
-  res.json(updatedWorkspace);
+  res.json(publicWorkspace(updatedWorkspace));
 });
 
 // Star or unstar a project in the sidebar
@@ -716,7 +762,7 @@ app.post('/api/workspace/favorites', authMiddleware, (req: AuthenticatedRequest,
   workspace.favoriteProjectIds = favorite ? [...current, projectId] : current;
   workspace.updatedAt = now();
   db.save();
-  res.json(workspace);
+  res.json(publicWorkspace(workspace));
 });
 
 const MAX_RECENT_TABS = 12;
@@ -749,7 +795,7 @@ app.post('/api/workspace/open-tab', authMiddleware, (req: AuthenticatedRequest, 
   workspace.updatedAt = now();
   db.save();
 
-  res.json(workspace);
+  res.json(publicWorkspace(workspace));
 });
 
 // Close a tab. Only affects this user's workspace; NEVER deletes or archives the project.
@@ -767,7 +813,7 @@ app.post('/api/workspace/close-tab', authMiddleware, (req: AuthenticatedRequest,
   workspace.updatedAt = now();
   db.save();
 
-  res.json(workspace);
+  res.json(publicWorkspace(workspace));
 });
 
 // ==========================================
@@ -814,9 +860,18 @@ app.post(
     const body = req.body ?? {};
 
     const name = text(body.name, 'Project name', 200, true)!;
-    const clientId = text(body.clientId, 'Client', 100, true)!;
-    const client = database.clients.find((c) => c.id === clientId);
-    if (!client) throw new HttpError(400, 'Selected client does not exist');
+    // The client is either picked from the list (clientId) or typed by name (clientName). A typed
+    // name that matches an existing client uses it; otherwise a new client is created.
+    let client: Client | undefined;
+    const clientName = text(body.clientName, 'Client name', 200);
+    if (body.clientId) {
+      client = database.clients.find((c) => c.id === String(body.clientId));
+      if (!client) throw new HttpError(400, 'Selected client does not exist');
+    } else if (clientName) {
+      client = database.clients.find((c) => c.name.trim().toLowerCase() === clientName.toLowerCase());
+    } else {
+      throw new HttpError(400, 'Client is required');
+    }
 
     const code = text(body.code, 'Project code', 20)?.toUpperCase() || `PRJ-${Math.floor(100 + Math.random() * 900)}`;
     const template = body.templateId ? findTemplate(String(body.templateId)) : null;
@@ -831,11 +886,29 @@ app.post(
     );
     team.add(user.id);
 
+    if (!client) {
+      client = {
+        id: newId('cli'),
+        name: clientName!,
+        company: clientName!,
+        industry: '',
+        contactPerson: '',
+        email: '',
+        phone: '',
+        status: 'active',
+        totalBilled: 0,
+        activeProjectsCount: 0,
+        notes: '',
+        website: '',
+      };
+      database.clients.unshift(client);
+    }
+
     const newProject: Project = {
       id: newId('prj'),
       code,
       name,
-      clientId,
+      clientId: client.id,
       clientName: client.name,
       description: text(body.description, 'Description', 5000) ?? '',
       status: 'active',
@@ -1142,7 +1215,7 @@ app.delete(
     database.comments = keep(database.comments);
     removeProjectFromWorkspaces(project.id);
 
-    fs.rmSync(path.join(UPLOADS_DIR, project.id), { recursive: true, force: true });
+    fs.rmSync(path.join(currentTenant().uploadsDir, project.id), { recursive: true, force: true });
 
     db.save();
     res.json({ message: 'Project successfully deleted' });
@@ -1556,7 +1629,7 @@ const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
 const upload = multer({
   storage: multer.diskStorage({
     destination: (req, _file, cb) => {
-      const dir = path.join(UPLOADS_DIR, String(req.params.id));
+      const dir = path.join(tenantOf(req).uploadsDir, String(req.params.id));
       fs.mkdirSync(dir, { recursive: true });
       cb(null, dir);
     },
@@ -1581,7 +1654,7 @@ app.post(
   '/api/projects/:id/files',
   authMiddleware,
   requireProjectAccess,
-  upload.single('file'),
+  keepTenant(upload.single('file')),
   route((req, res) => {
     const user = req.user!;
     const project = getProject(req);
@@ -1622,7 +1695,7 @@ app.get(
     const file = db.getData().files.find((f) => f.id === param(req, 'fileId') && f.projectId === param(req, 'id'));
     if (!file) throw new HttpError(404, 'File not found');
     if (!file.storedName) throw new HttpError(404, 'This is a sample entry with no stored file content');
-    const fullPath = path.join(UPLOADS_DIR, file.projectId, path.basename(file.storedName));
+    const fullPath = path.join(currentTenant().uploadsDir, file.projectId, path.basename(file.storedName));
     if (!fs.existsSync(fullPath)) throw new HttpError(404, 'Stored file is missing on the server');
     res.download(fullPath, file.name);
   })
@@ -1644,7 +1717,7 @@ app.delete(
 
     database.files = database.files.filter((f) => f.id !== file.id);
     if (file.storedName) {
-      fs.rmSync(path.join(UPLOADS_DIR, project.id, path.basename(file.storedName)), { force: true });
+      fs.rmSync(path.join(currentTenant().uploadsDir, project.id, path.basename(file.storedName)), { force: true });
     }
     logActivity(project.id, user, `deleted file "${file.name}"`, 'file');
     db.save();
@@ -1923,7 +1996,7 @@ app.post(
   requireRole(['admin', 'pm']),
   route((req, res) => {
     const fields = clientFields(req.body ?? {}, req.user!.role === 'admin');
-    if (!fields.name || !fields.email) throw new HttpError(400, 'Client name and email are required');
+    if (!fields.name) throw new HttpError(400, 'Client name is required');
 
     const newClient: Client = {
       id: newId('cli'),
@@ -1931,7 +2004,7 @@ app.post(
       company: fields.company || fields.name,
       industry: fields.industry || 'Technology',
       contactPerson: fields.contactPerson || 'Primary Contact',
-      email: fields.email,
+      email: fields.email || '',
       phone: fields.phone || '',
       status: fields.status || 'active',
       totalBilled: fields.totalBilled ?? 0,
@@ -1956,7 +2029,7 @@ app.put(
     if (!client) throw new HttpError(404, 'Client not found');
 
     const fields = clientFields(req.body ?? {}, req.user!.role === 'admin');
-    if (fields.name === '' || fields.email === '') throw new HttpError(400, 'Client name and email are required');
+    if (fields.name === '') throw new HttpError(400, 'Client name is required');
     Object.assign(client, fields);
 
     if (fields.name) {
@@ -2230,14 +2303,16 @@ app.put(
   })
 );
 
-// Profile photos are served without sign-in (an <img> can't send a token); the names are random
-export const AVATAR_DIR = path.join(UPLOADS_DIR, 'avatars');
+// Profile photos are served without sign-in (an <img> can't send a token); the names are random.
+// Each office keeps its own: /api/avatars/<office>/<file> (main-office photos from before offices: /api/avatars/<file>).
+const avatarDir = (tenant = currentTenant()) => path.join(tenant.uploadsDir, 'avatars');
 const AVATAR_TYPES: Record<string, string> = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/gif': '.gif' };
 const avatarUpload = multer({
   storage: multer.diskStorage({
-    destination: (_req, _file, cb) => {
-      fs.mkdirSync(AVATAR_DIR, { recursive: true });
-      cb(null, AVATAR_DIR);
+    destination: (req, _file, cb) => {
+      const dir = avatarDir(tenantOf(req));
+      fs.mkdirSync(dir, { recursive: true });
+      cb(null, dir);
     },
     filename: (_req, file, cb) => cb(null, `${uuidv4()}${AVATAR_TYPES[file.mimetype] ?? '.img'}`),
   }),
@@ -2245,17 +2320,24 @@ const avatarUpload = multer({
   fileFilter: (_req, file, cb) => cb(null, file.mimetype in AVATAR_TYPES),
 });
 
-const ownAvatarFile = (avatar: string) => (avatar.startsWith('/api/avatars/') ? path.join(AVATAR_DIR, path.basename(avatar)) : null);
+// The file behind one of this office's photo URLs (never another office's)
+function ownAvatarFile(avatar: string): string | null {
+  const parts = avatar.startsWith('/api/avatars/') ? avatar.slice('/api/avatars/'.length).split('/') : [];
+  const here = currentTenant().id;
+  if (parts.length === 2 && parts[0] === here) return path.join(avatarDir(), path.basename(parts[1]));
+  if (parts.length === 1 && here === MAIN_TENANT_ID) return path.join(avatarDir(), path.basename(parts[0]));
+  return null;
+}
 
 app.post(
   '/api/auth/me/avatar',
   authMiddleware,
-  avatarUpload.single('avatar'),
+  keepTenant(avatarUpload.single('avatar')),
   route((req, res) => {
     const user = req.user!;
     if (!req.file) throw new HttpError(400, 'Choose a JPG, PNG, WebP or GIF image up to 2 MB');
     const previous = ownAvatarFile(user.avatar);
-    user.avatar = `/api/avatars/${req.file.filename}`;
+    user.avatar = `/api/avatars/${encodeURIComponent(currentTenant().id)}/${req.file.filename}`;
     db.save();
     if (previous) fs.rmSync(previous, { force: true });
     res.json(user);
@@ -2275,16 +2357,18 @@ app.delete(
   })
 );
 
-app.get('/api/avatars/:file', (req, res) => {
-  const file = param(req, 'file');
-  if (!/^[0-9a-f-]{36}\.(jpg|png|webp|gif)$/.test(file)) {
+function sendAvatar(res: Response, officeId: string, file: string) {
+  const tenant = getTenant(officeId);
+  if (!tenant || !/^[0-9a-f-]{36}\.(jpg|png|webp|gif)$/.test(file)) {
     res.status(404).end();
     return;
   }
-  res.sendFile(path.join(AVATAR_DIR, file), { maxAge: '365d', immutable: true }, (err) => {
+  res.sendFile(path.join(avatarDir(tenant), file), { maxAge: '365d', immutable: true }, (err) => {
     if (err && !res.headersSent) res.status(404).end();
   });
-});
+}
+app.get('/api/avatars/:office/:file', (req, res) => sendAvatar(res, param(req, 'office'), param(req, 'file')));
+app.get('/api/avatars/:file', (req, res) => sendAvatar(res, MAIN_TENANT_ID, param(req, 'file')));
 
 const KINDS = NOTIFICATION_KINDS.map((k) => k.kind) as readonly NotificationKind[];
 
@@ -2304,6 +2388,62 @@ app.put(
     res.json({ muted: workspace.mutedNotificationKinds });
   })
 );
+
+// ==========================================
+// PHONE & DESKTOP NOTIFICATIONS (Web Push)
+// ==========================================
+
+app.get('/api/push/config', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
+  res.json({ enabled: !!pushPublicKey, publicKey: pushPublicKey });
+});
+
+// This device should get this person's notifications
+app.post(
+  '/api/push/subscribe',
+  authMiddleware,
+  route((req, res) => {
+    if (!pushPublicKey) throw new HttpError(503, 'Phone notifications are not set up on this server');
+    const sub = req.body?.subscription;
+    if (!isValidSubscription(sub)) throw new HttpError(400, 'Invalid subscription');
+    addSubscription(req.user!.id, sub, ensureWorkspace(req.user!.id));
+    db.save();
+    res.json({ ok: true });
+  })
+);
+
+// This device should stop (turned off, or signing out)
+app.post(
+  '/api/push/unsubscribe',
+  authMiddleware,
+  route((req, res) => {
+    const endpoint = req.body?.endpoint;
+    if (typeof endpoint !== 'string') throw new HttpError(400, 'endpoint is required');
+    const ws = ensureWorkspace(req.user!.id);
+    if (ws.pushSubscriptions?.some((s) => s.endpoint === endpoint)) {
+      removeSubscription(endpoint);
+      db.save();
+    }
+    res.json({ ok: true });
+  })
+);
+
+app.post(
+  '/api/push/test',
+  authMiddleware,
+  route(async (req, res) => {
+    const sent = await sendPush(req.user!.id, {
+      title: 'HandleMyDesk',
+      body: 'Phone notifications are working.',
+      url: '/#/',
+      tag: 'test',
+    });
+    if (sent === 0) throw new HttpError(400, 'No device received it. Turn notifications on again on this device.');
+    res.json({ sent });
+  })
+);
+
+// Offices, "Report a problem" and the HandleMyDesk owner console (see platform.ts)
+registerPlatformRoutes(app, notify);
 
 // ==========================================
 // REMINDERS (run hourly)
@@ -2428,13 +2568,24 @@ app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
 // Start listening if not running in test mode
 // One automatic backup a day: checked at start-up and then every hour
 function runDailyBackup() {
-  const newest = listBackups().find((b) => !/-[a-z]+\.db$/.test(b.name));
+  const newest = listBackups(currentTenant().backupDir).find((b) => !/-[a-z]+\.db$/.test(b.name));
   if (newest && Date.now() - Date.parse(newest.createdAt) < 23 * 3600 * 1000) return;
   try {
     const info = db.backup();
-    console.log(`Backup saved: ${info.name}`);
+    console.log(`Backup saved for office ${currentTenant().id}: ${info.name}`);
   } catch (err) {
-    console.error('Automatic backup failed:', err);
+    console.error(`Automatic backup failed for office ${currentTenant().id}:`, err);
+  }
+}
+
+// Hourly jobs run once for every office, inside that office
+function forEveryOffice(job: () => unknown) {
+  for (const tenant of allTenants()) {
+    try {
+      runInTenant(tenant, job);
+    } catch (err) {
+      console.error(`Hourly job failed for office ${tenant.id}:`, err);
+    }
   }
 }
 
@@ -2442,10 +2593,13 @@ if (process.env.NODE_ENV !== 'test') {
   if (IS_PROD && !fs.existsSync(path.join(DIST_DIR, 'index.html'))) {
     console.warn('No built app found in dist/. Run "npm run build" before "npm start".');
   }
-  runDailyBackup();
-  setInterval(runDailyBackup, 3600 * 1000).unref();
-  runReminders();
-  setInterval(() => runReminders(), 3600 * 1000).unref();
+  forEveryOffice(runDailyBackup);
+  setInterval(() => forEveryOffice(runDailyBackup), 3600 * 1000).unref();
+  forEveryOffice(() => runReminders());
+  setInterval(() => forEveryOffice(() => runReminders()), 3600 * 1000).unref();
+
+  // From here on, all work must know its office (requests and the hourly jobs above do)
+  requireOfficeContext();
 
   const server = app.listen(PORT, () => {
     console.log(`HandleMyDesk server running on port ${PORT} (process ${process.pid})`);

@@ -31,17 +31,25 @@ export const LoginView: React.FC = () => {
       .catch(() => {});
   }, []);
   const [submitting, setSubmitting] = useState(false);
+  // Same email and password in more than one office: the person picks which to open
+  const [offices, setOffices] = useState<Array<{ id: string; name: string }> | null>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const signIn = async (officeId?: string) => {
     setError(null);
     setSubmitting(true);
     try {
-      await login(email.trim(), password);
+      await login(email.trim(), password, officeId);
     } catch (err: any) {
-      setError(err.message || 'Sign-in failed');
+      if (err.data?.code === 'CHOOSE_OFFICE') setOffices(err.data.offices);
+      else setError(err.message || 'Sign-in failed');
       setSubmitting(false);
     }
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setOffices(null);
+    signIn();
   };
 
   return (
@@ -84,9 +92,20 @@ export const LoginView: React.FC = () => {
           <Field label="Password">
             <input type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} className={inputClass} />
           </Field>
-          <Button type="submit" className="w-full h-9" disabled={submitting || !email || !password}>
-            {submitting ? 'Signing in…' : 'Continue'}
-          </Button>
+          {offices ? (
+            <div className="space-y-2" role="group" aria-label="Choose your office">
+              <p className="text-sm text-fg-muted">You have accounts in more than one office. Which one do you want to open?</p>
+              {offices.map((o) => (
+                <Button key={o.id} variant="secondary" className="w-full h-9 justify-start" disabled={submitting} onClick={() => signIn(o.id)}>
+                  {o.name}
+                </Button>
+              ))}
+            </div>
+          ) : (
+            <Button type="submit" className="w-full h-9" disabled={submitting || !email || !password}>
+              {submitting ? 'Signing in…' : 'Continue'}
+            </Button>
+          )}
         </form>
 
         {import.meta.env.DEV && (
