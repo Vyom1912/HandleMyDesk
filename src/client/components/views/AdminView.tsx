@@ -6,6 +6,8 @@ import { BackupInfo, ProjectTemplate } from '../../../types';
 import { Button } from '../ui/Field';
 import { formatDateTime, timeAgo } from '../ui/Badges';
 import { PageShell } from '../layout/PageShell';
+import { BrandingSection, ExportSection } from './AdminSections';
+import { ListSkeleton } from '../ui/Skeleton';
 
 const size = (bytes: number) => (bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`);
 
@@ -145,6 +147,8 @@ export const AdminView: React.FC = () => {
         </Button>
       </section>
 
+      <BrandingSection />
+      <ExportSection />
       <TemplatesSection />
       <SignInSection />
 
@@ -176,9 +180,7 @@ export const AdminView: React.FC = () => {
         </div>
 
         {loading ? (
-          <p className="text-sm text-fg-muted py-6" role="status">
-            Loading…
-          </p>
+          <ListSkeleton rows={3} label="Loading backups" className="mt-4" />
         ) : (
           backups.length > 0 && (
             <ul className="mt-4 border border-line rounded-lg divide-y divide-line">

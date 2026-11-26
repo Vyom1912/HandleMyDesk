@@ -4,7 +4,7 @@ import { SupportTicket, SupportCategory } from '../../../types';
 import { api } from '../../services/api';
 import { OPEN_SUPPORT_EVENT } from '../../services/office';
 import { useApp } from '../../context/AppContext';
-import { Modal } from '../ui/Modal';
+import { Modal, useDirty } from '../ui/Modal';
 import { Field, inputClass, selectClass, textareaClass, Button, EmptyState } from '../ui/Field';
 import { Tag, timeAgo, formatDateTime } from '../ui/Badges';
 import { CATEGORY_LABEL, CATEGORY_TONE } from '../owner/OwnerConsole';
@@ -22,6 +22,7 @@ export const SupportModal: React.FC = () => {
   const [reply, setReply] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const dirty = useDirty({ form, reply }, open);
 
   const load = useCallback(() => {
     api
@@ -92,6 +93,7 @@ export const SupportModal: React.FC = () => {
     <Modal
       open={open}
       onClose={close}
+      dirty={dirty && !busy}
       title={view === 'new' ? 'Report a problem' : selected ? selected.subject : 'Your reports'}
       description={
         view === 'new'

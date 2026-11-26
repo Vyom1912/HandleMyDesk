@@ -30,6 +30,7 @@ import {
   LifeBuoy,
 } from 'lucide-react';
 import { useOffice, openSupport } from '../../services/office';
+import { BrandMark } from '../ui/BrandMark';
 import { useApp, PageView, ThemePreference } from '../../context/AppContext';
 import { Project, ProjectSection } from '../../../types';
 import { Avatar, StatusDot } from '../ui/Badges';
@@ -208,9 +209,7 @@ export const Sidebar: React.FC = () => {
             aria-haspopup="menu"
             aria-expanded={menuOpen}
           >
-            <span className="w-6 h-6 pointer-fine:w-5 pointer-fine:h-5 rounded bg-fg text-canvas text-[11px] font-bold flex items-center justify-center shrink-0" aria-hidden="true">
-              H
-            </span>
+            <BrandMark brand={office} size="sm" />
             <span className="flex-1 min-w-0 text-left">
               <span className="block text-sm font-semibold text-fg truncate leading-tight">{office?.name ?? 'HandleMyDesk'}</span>
               <span className="block text-xs text-fg-faint truncate leading-tight">{currentUser?.name}</span>

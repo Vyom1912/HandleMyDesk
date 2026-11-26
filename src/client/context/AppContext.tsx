@@ -20,7 +20,10 @@ export interface ConfirmOptions {
   requireText?: string;
 }
 
-export type ThemePreference = 'light' | 'dark' | 'system';
+export type { ThemePreference } from '../services/appearance';
+import { ThemePreference, applyTheme, storedTheme, saveTheme } from '../services/appearance';
+import { forgetOffice } from '../services/office';
+import { pendingDeletes } from '../services/undo';
 export type PageView = 'home' | 'tasks' | 'projects' | 'clients' | 'team' | 'admin';
 export type Route = { view: PageView } | { view: 'project'; projectId: string; section: ProjectSection; taskId?: string };
 
@@ -78,7 +81,6 @@ type NotificationPage = { items: NotificationItem[]; hasMore: boolean; unreadCou
 const NOTIFICATION_PAGE = 50;
 
 const SECTION_KEY = (userId: string, projectId: string) => `handlemydesk_section_${userId}_${projectId}`;
-const THEME_KEY = 'handlemydesk_theme';
 const SIDEBAR_KEY = 'handlemydesk_sidebar';
 
 const store = {
@@ -98,10 +100,6 @@ const store = {
   },
 };
 
-function applyTheme(pref: ThemePreference) {
-  const dark = pref === 'dark' || (pref === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-  document.documentElement.dataset.theme = dark ? 'dark' : 'light';
-}
 
 type AuthStatus = 'checking' | 'signed_out' | 'signed_in';
 
@@ -165,6 +163,11 @@ interface AppContextType {
   showToast: (message: string, type?: ToastType, action?: Toast['action']) => void;
   dismissToast: () => void;
   confirm: (options: ConfirmOptions) => Promise<boolean>;
+  /**
+   * Removes something from the screen at once and shows "Undo" for 6 seconds; only then is it
+   * deleted on the server. If that fails, it comes back with an error message.
+   */
+  deleteWithUndo: (options: { id: string; message: string; hide: () => void; restore: () => void; commit: () => Promise<unknown>; done?: () => void }) => void;
   confirmState: (ConfirmOptions & { resolve: (ok: boolean) => void }) | null;
 }
 
@@ -188,7 +191,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setUnreadCount(page.unreadCount);
   };
   const [route, setRoute] = useState<Route>(() => parseHash(window.location.hash));
-  const [theme, setThemeState] = useState<ThemePreference>(() => (store.get(THEME_KEY) as ThemePreference) || 'light');
+  const [theme, setThemeState] = useState<ThemePreference>(storedTheme);
   const [sidebarCollapsed, setSidebarCollapsedState] = useState(() => store.get(SIDEBAR_KEY) === 'collapsed');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
@@ -220,6 +223,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     toastTimer.current = setTimeout(() => setToast(null), action ? 6000 : 3500);
   }, []);
 
+  const deleteWithUndo = useCallback<AppContextType['deleteWithUndo']>(
+    ({ id, message, hide, restore, commit, done }) => {
+      hide();
+      pendingDeletes.add(id);
+      const timer = setTimeout(async () => {
+        try {
+          await commit();
+          done?.();
+        } catch (err: any) {
+          restore();
+          showToast(err?.message || 'Could not delete it', 'error');
+        } finally {
+          pendingDeletes.delete(id);
+        }
+      }, 6000);
+      showToast(message, 'info', {
+        label: 'Undo',
+        onClick: () => {
+          clearTimeout(timer);
+          pendingDeletes.delete(id);
+          restore();
+        },
+      });
+    },
+    [showToast]
+  );
+
   const confirm = useCallback(
     (options: ConfirmOptions) => new Promise<boolean>((resolve) => setConfirmState({ ...options, resolve })),
     []
@@ -228,7 +258,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // ---------- Appearance ----------
   const setTheme = (t: ThemePreference) => {
     setThemeState(t);
-    store.set(THEME_KEY, t);
+    saveTheme(t);
   };
 
   useEffect(() => {
@@ -305,6 +335,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Stop this device getting the person's phone notifications (needs the token, so before clearing it)
     void detachPushOnSignOut(getStoredToken());
     setStoredToken(null);
+    forgetOffice();
     setCurrentUser(null);
     setWorkspace(null);
     setProjects([]);
@@ -615,6 +646,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         showToast,
         dismissToast,
         confirm,
+        deleteWithUndo,
         confirmState: confirmState && {
           ...confirmState,
           resolve: (ok: boolean) => {

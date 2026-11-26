@@ -20,7 +20,10 @@ import {
   SupportTicket,
   SupportCategory,
   SupportMessage,
+  OfficeBrand,
 } from '../types';
+import multer from 'multer';
+import { mailConfigured, sendMail, simpleEmail, appUrl } from './mail';
 
 /*
  * HANDLEMYDESK OWNER LEVEL
@@ -39,6 +42,18 @@ interface OfficeRecord {
   status: OfficeStatus;
   notes: string;
   createdAt: string;
+  // Branding: the office's sign-in link name, accent colour and logo file (in uploads/brand)
+  slug?: string;
+  color?: string;
+  logo?: string;
+}
+
+/** A "Forgot password?" email link. Only a hash of the secret in the link is kept. */
+interface ResetToken {
+  hash: string;
+  officeId: string;
+  userId: string;
+  expiresAt: number;
 }
 
 interface OwnerRecord extends OwnerProfile {
@@ -53,6 +68,7 @@ interface PlatformData {
   owners: OwnerRecord[];
   tickets: SupportTicket[];
   log: OwnerLogEntry[];
+  resetTokens: ResetToken[];
 }
 
 const PLATFORM_FILE = path.join(DATA_DIR, 'platform.json');
@@ -65,7 +81,7 @@ const newId = (prefix: string) => `${prefix}-${crypto.randomUUID().slice(0, 8)}`
 export const SUPPORT_USER_ID = 'hmd-support';
 
 function freshPlatform(): PlatformData {
-  return { offices: [], owners: [], tickets: [], log: [] };
+  return { offices: [], owners: [], tickets: [], log: [], resetTokens: [] };
 }
 
 function loadPlatform(): PlatformData {
@@ -92,6 +108,24 @@ function savePlatform() {
 if (!data.offices.some((o) => o.id === MAIN_TENANT_ID)) {
   data.offices.unshift({ id: MAIN_TENANT_ID, name: process.env.MAIN_OFFICE_NAME?.trim() || 'Main office', status: 'active', notes: '', createdAt: now() });
 }
+
+// ----- Office sign-in link names ("acme-builders" in ?office=acme-builders) -----
+const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/;
+function uniqueSlug(name: string, exceptId?: string): string {
+  const base =
+    name
+      .toLowerCase()
+      .normalize('NFKD')
+      .replace(/[^\w\s-]/g, '')
+      .replace(/[\s_]+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 34) || 'office';
+  let slug = base;
+  for (let n = 2; data.offices.some((o) => o.slug === slug && o.id !== exceptId); n++) slug = `${base}-${n}`;
+  return slug;
+}
+for (const office of data.offices) office.slug ??= uniqueSlug(office.name, office.id);
 
 // Which OWNER_PASSWORD was last applied (a keyed hash, never the password itself)
 const envFingerprint = (password: string) => crypto.createHmac('sha256', 'handlemydesk-owner-password').update(password).digest('hex');
@@ -137,7 +171,7 @@ function openTenant(office: OfficeRecord, firstAdmin?: FirstAdmin): Tenant {
   const backupDir = path.join(dir, 'backups');
   const tenant: Tenant = {
     id: office.id,
-    db: new Database(IS_TEST ? ':memory:' : path.join(dir, 'handlemydesk.db'), { backupDir, firstAdmin }),
+    db: new Database(IS_TEST ? ':memory:' : path.join(dir, 'handlemydesk.db'), { backupDir, firstAdmin, office: office.id }),
     uploadsDir: IS_TEST ? path.join(os.tmpdir(), 'handlemydesk-uploads-test', office.id) : path.join(dir, 'uploads'),
     backupDir,
   };
@@ -335,7 +369,56 @@ function summarize(office: OfficeRecord): OfficeSummary {
     overdueTasks: openTasks.filter((t) => t.dueDate && t.dueDate < today).length,
     lastActivity,
     openTickets: data.tickets.filter((t) => t.officeId === office.id && t.status === 'open').length,
+    slug: office.slug!,
+    brandColor: office.color,
+    logoUrl: logoUrlOf(office),
   };
+}
+
+// ----- Branding -----
+const logoUrlOf = (o: OfficeRecord) => (o.logo ? `/api/brand-logo/${encodeURIComponent(o.id)}/${o.logo}` : undefined);
+const brandOf = (o: OfficeRecord): OfficeBrand => ({ id: o.id, name: o.name, slug: o.slug!, color: o.color, logoUrl: logoUrlOf(o) });
+const brandDir = (tenant: Tenant) => path.join(tenant.uploadsDir, 'brand');
+const LOGO_TYPES: Record<string, string> = { 'image/png': '.png', 'image/jpeg': '.jpg', 'image/webp': '.webp' };
+const logoUpload = multer({
+  storage: multer.diskStorage({
+    destination: (req, _file, cb) => {
+      const dir = brandDir(tenantOf(req));
+      fs.mkdirSync(dir, { recursive: true });
+      cb(null, dir);
+    },
+    filename: (_req, file, cb) => cb(null, `${crypto.randomUUID()}${LOGO_TYPES[file.mimetype] ?? '.img'}`),
+  }),
+  limits: { fileSize: 1024 * 1024, files: 1 },
+  // No SVG: an SVG opened directly could run script on this site
+  fileFilter: (_req, file, cb) => cb(null, file.mimetype in LOGO_TYPES),
+});
+function removeLogoFile(office: OfficeRecord) {
+  if (!office.logo) return;
+  const tenant = openTenant(office);
+  fs.rmSync(path.join(brandDir(tenant), path.basename(office.logo)), { force: true });
+  office.logo = undefined;
+}
+
+// ----- "Forgot password?" by email -----
+const RESET_TTL_MS = 30 * 60 * 1000;
+const sha256 = (s: string) => crypto.createHash('sha256').update(s).digest('hex');
+function newResetToken(officeId: string, userId: string): string {
+  const secret = crypto.randomBytes(32).toString('base64url');
+  const nowMs = Date.now();
+  data.resetTokens = data.resetTokens.filter((t) => t.expiresAt > nowMs && !(t.officeId === officeId && t.userId === userId));
+  data.resetTokens.push({ hash: sha256(secret), officeId, userId, expiresAt: nowMs + RESET_TTL_MS });
+  return secret;
+}
+function findResetToken(secret: unknown): { token: ResetToken; office: OfficeRecord; tenant: Tenant; user: User } | null {
+  if (typeof secret !== 'string' || secret.length < 20 || secret.length > 100) return null;
+  const hash = sha256(secret);
+  const token = data.resetTokens.find((t) => t.hash === hash && t.expiresAt > Date.now());
+  const office = token && officeById(token.officeId);
+  if (!token || !office || office.status === 'suspended') return null;
+  const tenant = openTenant(office);
+  const user = tenant.db.getData().users.find((u) => u.id === token.userId && u.active !== false);
+  return user ? { token, office, tenant, user } : null;
 }
 
 /** The support account inside the current office; (re)created when the owner goes in. */
@@ -402,18 +485,55 @@ export function registerPlatformRoutes(app: express.Express, notify: Notifier) {
     '/api/auth/forgot',
     handle(async (req, res) => {
       const email = text(req.body?.email, 'Email', 200, true).toLowerCase();
-      const answer = { ok: true };
+      // Says how help will come (depends only on settings, never on whether the email exists)
+      const answer = { ok: true, via: mailConfigured() ? 'email' : 'admin' };
       if (rateLimited(`email:${email}`, 1, 15 * 60 * 1000) || rateLimited(`ip:${req.ip}`, 20, 3600 * 1000)) {
         res.json(answer);
         return;
       }
 
+      const found: Array<{ office: OfficeRecord; tenant: Tenant; person: User }> = [];
       for (const office of data.offices) {
         if (office.status === 'suspended') continue;
         const tenant = openTenant(office);
         const person = tenant.db.getData().users.find((u) => u.id !== SUPPORT_USER_ID && u.active !== false && emailOf(u) === email);
-        if (!person) continue;
+        if (person) found.push({ office, tenant, person });
+      }
+      if (found.length === 0) {
+        res.json(answer);
+        return;
+      }
 
+      // With email set up, people reset their own password from a link
+      if (mailConfigured()) {
+        try {
+          const base = appUrl()!;
+          const buttons = found.map(({ office, person }) => ({
+            label: found.length > 1 ? `Choose a new password for ${office.name}` : 'Choose a new password',
+            url: `${base}/?office=${encodeURIComponent(office.slug!)}#/reset/${newResetToken(office.id, person.id)}`,
+          }));
+          savePlatform();
+          const first = found[0];
+          const mail = simpleEmail({
+            greeting: `Hello ${first.person.name.split(' ')[0]},`,
+            paragraphs: [
+              `Someone (hopefully you) asked to reset the HandleMyDesk password for ${email}.`,
+              'Use the button below within 30 minutes to choose a new password. It works once.',
+            ],
+            buttons,
+            footer: "If you didn't ask for this, you can ignore this email; your password stays the same.",
+            accent: found.length === 1 ? first.office.color : undefined,
+          });
+          await sendMail({ to: first.person.email, subject: 'Reset your HandleMyDesk password', ...mail });
+          res.json(answer);
+          return;
+        } catch (err) {
+          // Fall back to asking an administrator, so the person isn't left waiting for nothing
+          console.error('Could not send the password reset email:', err);
+        }
+      }
+
+      for (const { office, tenant, person } of found) {
         runInTenant(tenant, () => {
           const otherAdmins = db
             .getData()
@@ -464,10 +584,137 @@ export function registerPlatformRoutes(app: express.Express, notify: Notifier) {
     })
   );
 
+  // ----- The link from the reset email -----
+  // POST (not GET) so the secret stays out of server logs
+  app.post(
+    '/api/auth/reset/check',
+    handle((req, res) => {
+      if (rateLimited(`ip:${req.ip}:reset`, 30, 3600 * 1000)) throw new PlatformError(429, 'Too many attempts. Try again later.');
+      const found = findResetToken(req.body?.token);
+      if (!found) throw new PlatformError(400, 'This link has expired or was already used. Ask for a new one with "Forgot password?".');
+      res.json({ name: found.user.name, email: found.user.email, office: brandOf(found.office) });
+    })
+  );
+
+  app.post(
+    '/api/auth/reset',
+    handle(async (req, res) => {
+      if (rateLimited(`ip:${req.ip}:reset`, 30, 3600 * 1000)) throw new PlatformError(429, 'Too many attempts. Try again later.');
+      const found = findResetToken(req.body?.token);
+      if (!found) throw new PlatformError(400, 'This link has expired or was already used. Ask for a new one with "Forgot password?".');
+      const password = typeof req.body?.password === 'string' ? req.body.password : '';
+      if (password.length < 8 || password.length > 200) throw new PlatformError(400, 'Use at least 8 characters');
+      const { office, tenant, user } = found;
+
+      await runInTenant(tenant, async () => {
+        db.setPasswordHash(user.id, await bcrypt.hash(password, 10), { mustChange: false });
+        // Ends every other session, in case someone else knew the old password
+        db.bumpSessionVersion(user.id);
+        closeStreamsFor(user.id);
+      });
+      // The link works once
+      data.resetTokens = data.resetTokens.filter((t) => !(t.officeId === office.id && t.userId === user.id));
+      for (const t of data.tickets) {
+        if (t.officeId === office.id && t.userId === user.id && t.category === 'password' && t.status === 'open') {
+          t.status = 'resolved';
+          t.unreadByOwner = false;
+          t.updatedAt = now();
+          t.messages.push({ id: newId('msg'), from: 'customer', name: user.name, text: 'Reset their own password from the email link.', at: now() });
+        }
+      }
+      savePlatform();
+      res.json({ ok: true, email: user.email, officeId: office.id });
+    })
+  );
+
+  // ----- Branding: public, for the office's sign-in page -----
+  app.get('/api/brand/:slug', (req, res) => {
+    const office = data.offices.find((o) => o.slug === String(req.params.slug).toLowerCase());
+    if (!office) {
+      res.status(404).json({ error: 'Office not found' });
+      return;
+    }
+    res.set('Cache-Control', 'public, max-age=300');
+    res.json(brandOf(office));
+  });
+
+  app.get('/api/brand-logo/:office/:file', (req, res) => {
+    const office = officeById(String(req.params.office));
+    const file = String(req.params.file);
+    if (!office || office.logo !== file || !/^[0-9a-f-]{36}\.(png|jpg|webp)$/.test(file)) {
+      res.status(404).end();
+      return;
+    }
+    res.sendFile(path.join(brandDir(openTenant(office)), file), { maxAge: '365d', immutable: true, headers: { 'X-Content-Type-Options': 'nosniff' } }, (err) => {
+      if (err && !res.headersSent) res.status(404).end();
+    });
+  });
+
   // ----- Inside an office: which office am I in? -----
   app.get('/api/office', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
-    res.json({ id: currentTenant().id, name: officeName(), supportVisit: req.user!.id === SUPPORT_USER_ID });
+    const office = officeById(currentTenant().id)!;
+    res.json({ ...brandOf(office), supportVisit: req.user!.id === SUPPORT_USER_ID });
   });
+
+  // ----- Inside an office: administrators set its look -----
+  const requireAdmin = (req: AuthenticatedRequest) => {
+    if (req.user!.role !== 'admin') throw new PlatformError(403, 'Only administrators can change the office branding');
+    return officeById(currentTenant().id)!;
+  };
+
+  app.put(
+    '/api/office/brand',
+    authMiddleware,
+    handle<AuthenticatedRequest>((req, res) => {
+      const office = requireAdmin(req);
+      const body = req.body ?? {};
+      if (body.color !== undefined) {
+        if (body.color === null || body.color === '') office.color = undefined;
+        else if (typeof body.color === 'string' && /^#[0-9a-f]{6}$/i.test(body.color)) office.color = body.color.toLowerCase();
+        else throw new PlatformError(400, 'Colour must look like #2b63d9');
+      }
+      if (body.slug !== undefined) {
+        const slug = String(body.slug).trim().toLowerCase();
+        if (!SLUG_RE.test(slug)) throw new PlatformError(400, 'Use 1–40 lowercase letters, numbers and dashes for the sign-in link');
+        if (data.offices.some((o) => o.slug === slug && o.id !== office.id)) throw new PlatformError(400, 'That sign-in link is already taken');
+        office.slug = slug;
+      }
+      savePlatform();
+      res.json(brandOf(office));
+    })
+  );
+
+  app.post(
+    '/api/office/brand/logo',
+    authMiddleware,
+    (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+      if (req.user!.role !== 'admin') {
+        res.status(403).json({ error: 'Only administrators can change the office branding' });
+        return;
+      }
+      next();
+    },
+    keepTenant(logoUpload.single('logo')),
+    handle<AuthenticatedRequest>((req, res) => {
+      const office = requireAdmin(req);
+      if (!req.file) throw new PlatformError(400, 'Choose a PNG, JPG or WebP image up to 1 MB');
+      removeLogoFile(office);
+      office.logo = req.file.filename;
+      savePlatform();
+      res.json(brandOf(office));
+    })
+  );
+
+  app.delete(
+    '/api/office/brand/logo',
+    authMiddleware,
+    handle<AuthenticatedRequest>((req, res) => {
+      const office = requireAdmin(req);
+      removeLogoFile(office);
+      savePlatform();
+      res.json(brandOf(office));
+    })
+  );
 
   // ----- Inside an office: "Report a problem" -----
   const mine = (req: AuthenticatedRequest) =>
@@ -577,7 +824,7 @@ export function registerPlatformRoutes(app: express.Express, notify: Notifier) {
       const password = chosen || temporaryPassword();
       const mustChange = !chosen || body.mustChangePassword !== false;
 
-      const office: OfficeRecord = { id: newId('off'), name, status: 'active', notes: text(body.notes, 'Notes', 2000), createdAt: now() };
+      const office: OfficeRecord = { id: newId('off'), name, status: 'active', notes: text(body.notes, 'Notes', 2000), createdAt: now(), slug: uniqueSlug(name) };
       openTenant(office, { name: adminName, email: adminEmail, password, mustChange });
       data.offices.push(office);
       logAction(req.owner!, `added the office "${name}" with administrator ${adminEmail}`, office.id);
@@ -755,5 +1002,10 @@ export function resetPlatformForTests() {
   data.offices.splice(1);
   data.tickets.length = 0;
   data.log.length = 0;
+  data.resetTokens = [];
+  const main = data.offices[0];
+  main.color = undefined;
+  main.logo = undefined;
+  main.slug = uniqueSlug(main.name, main.id);
   for (const id of [...tenants.keys()]) if (id !== MAIN_TENANT_ID) tenants.delete(id);
 }

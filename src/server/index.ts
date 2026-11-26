@@ -35,6 +35,7 @@ import {
 import { addStream, removeStream, emitToUsers, closeStreamsFor } from './events';
 import { requestLogger, logServerError, LoggedRequest } from './logging';
 import { toCsv, csvFileName } from './csv';
+import { cloudStatus, filesMayHaveChanged, startFileWatch } from './cloud';
 import { ssoRouter } from './sso';
 import { pushPublicKey, sendPush, addSubscription, removeSubscription, isValidSubscription } from './push';
 import { BUILT_IN_TEMPLATES, instantiateTemplate, templateFromProject } from './templates';
@@ -103,6 +104,12 @@ if (process.env.CORS_ORIGIN) {
   app.use(cors({ origin: process.env.CORS_ORIGIN.split(',') }));
 }
 app.use(express.json({ limit: '1mb' }));
+
+// Uploads, logos and the office list are files: after any change, copy new files to the cloud database
+app.use((req, res, next) => {
+  if (req.method !== 'GET' && req.method !== 'HEAD') res.on('finish', () => filesMayHaveChanged());
+  next();
+});
 
 // One log line per request, with a request id that also goes back in the X-Request-Id header
 app.use(requestLogger);
@@ -347,7 +354,7 @@ app.use('/api/projects/:id', (req: AuthenticatedRequest, res, next) => {
 
 // Lets people (and the dev tooling) confirm which server process is answering
 app.get('/api/health', (req, res) => {
-  res.json({ ok: true, pid: process.pid, uptimeSeconds: Math.round(process.uptime()), schemaVersion: db.schemaVersion() });
+  res.json({ ok: true, pid: process.pid, uptimeSeconds: Math.round(process.uptime()), schemaVersion: db.schemaVersion(), cloud: cloudStatus() });
 });
 
 // ==========================================
@@ -1095,6 +1102,77 @@ app.get('/api/tasks/export.csv', authMiddleware, (req: AuthenticatedRequest, res
   let tasks = db.getData().tasks.filter((t) => visible.has(t.projectId));
   if (req.query.filter === 'assigned_to_me') tasks = tasks.filter((t) => t.assigneeId === req.user!.id);
   sendCsv(res, req.query.filter === 'assigned_to_me' ? 'my-tasks' : 'tasks', TASK_CSV_HEADERS, tasks.map(taskRow));
+});
+
+// Administrators: the whole office's activity (who did what, when), optionally between two dates.
+// ?from=YYYY-MM-DD&to=YYYY-MM-DD&tz=Asia/Kolkata (dates and times are shown in that time zone)
+app.get('/api/admin/export/activity.csv', authMiddleware, requireRole(['admin']), (req, res) => {
+  const dateOk = (v: unknown) => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : undefined);
+  const from = dateOk(req.query.from);
+  const to = dateOk(req.query.to);
+  let timeZone = 'UTC';
+  if (typeof req.query.tz === 'string' && req.query.tz.length < 64) {
+    try {
+      new Intl.DateTimeFormat('en-CA', { timeZone: req.query.tz });
+      timeZone = req.query.tz;
+    } catch {
+      // Unknown time zone: keep UTC
+    }
+  }
+  const dayOf = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' });
+  const timeOf = new Intl.DateTimeFormat('en-GB', { timeZone, hour: '2-digit', minute: '2-digit', hour12: false });
+
+  const database = db.getData();
+  const projects = new Map(database.projects.map((p) => [p.id, p]));
+  const emails = new Map(database.users.map((u) => [u.id, u.email]));
+  const rows = database.activities
+    .map((a) => ({ a, at: new Date(a.timestamp) }))
+    .filter(({ at }) => !Number.isNaN(at.getTime()))
+    .map(({ a, at }) => ({ a, day: dayOf.format(at), time: timeOf.format(at) }))
+    .filter(({ day }) => (!from || day >= from) && (!to || day <= to))
+    .sort((x, y) => y.a.timestamp.localeCompare(x.a.timestamp));
+
+  const name = `activity${from ? `-from-${from}` : ''}${to ? `-to-${to}` : ''}`;
+  sendCsv(
+    res,
+    name,
+    ['Date', `Time (${timeZone})`, 'Person', 'Email', 'Project code', 'Project', 'Type', 'What happened'],
+    rows.map(({ a, day, time }) => {
+      const p = projects.get(a.projectId);
+      return [day, time, a.userName, emails.get(a.userId), p?.code ?? '', p?.name ?? '(deleted project)', a.type, a.action];
+    })
+  );
+});
+
+// Administrators: everyone in the office, with their workload
+app.get('/api/admin/export/people.csv', authMiddleware, requireRole(['admin']), (req, res) => {
+  const database = db.getData();
+  const ROLE: Record<string, string> = { admin: 'Administrator', pm: 'Project manager', member: 'Member' };
+  sendCsv(
+    res,
+    'people',
+    ['Name', 'Email', 'Role', 'Job title', 'Department', 'Phone', 'Account', 'Projects', 'Open tasks', 'Overdue tasks', 'Done tasks'],
+    database.users
+      .filter((u) => u.id !== 'hmd-support')
+      .map((u) => {
+        const tasks = database.tasks.filter((t) => t.assigneeId === u.id);
+        const open = tasks.filter((t) => t.status !== 'done');
+        const today = now().slice(0, 10);
+        return [
+          u.name,
+          u.email,
+          ROLE[u.role] ?? u.role,
+          u.title,
+          u.department,
+          u.phone,
+          u.active === false ? 'Deactivated' : 'Active',
+          database.projects.filter((p) => projectMemberIds(p).has(u.id)).length,
+          open.length,
+          open.filter((t) => t.dueDate && t.dueDate < today).length,
+          tasks.length - open.length,
+        ];
+      })
+  );
 });
 
 app.get('/api/projects/:id/export/tasks.csv', authMiddleware, requireProjectAccess, (req, res) => {
@@ -2607,6 +2685,7 @@ if (process.env.NODE_ENV !== 'test') {
   // From here on, all work must know its office (requests and the hourly jobs above do)
   requireOfficeContext();
 
+  startFileWatch();
   const server = app.listen(PORT, () => {
     console.log(`HandleMyDesk server running on port ${PORT} (process ${process.pid})`);
   });

@@ -179,6 +179,14 @@ see each other. You, the HandleMyDesk owner, see all of them.
 
 Company sign-in (SSO) works for the first office only in this version.
 
+### Branding and exports (office administrators: Admin page)
+
+- **Branding:** upload the office logo, pick its colour, and copy its own sign-in link
+  (`https://<your-site>/?office=<name>`). That page shows the logo, name and colour; the device then
+  remembers it. You can copy each office's link from its card in the owner console too.
+- **Export:** download the office's activity (who did what, when, for any date range), people with
+  their workload, projects and tasks, as spreadsheets that open in Excel or Google Sheets.
+
 ### Passwords
 
 - **Adding an office or a person:** type a password, or leave it empty for a random temporary one.
@@ -187,6 +195,25 @@ Company sign-in (SSO) works for the first office only in this version.
   - staff → their office's administrators get a notification → **Team → person → Reset password**;
   - an office administrator (or an office with no other admin) → you get it in **Problems** →
     **Reset their password**. You can also reset any office admin from the office card (**Admin password**).
+- **Let people reset their own password by email (recommended).** Then "Forgot password?" emails a
+  link instead of asking an administrator:
+  1. Sign up free at <https://www.brevo.com> (300 emails a day).
+  2. **Senders, domains & dedicated IPs → Senders → Add a sender**: the address emails come from.
+     Brevo emails it a code to confirm. Best is an address on your own domain (then also add the domain
+     under **Domains** for better delivery); a Gmail address works for testing but may land in spam.
+  3. **SMTP & API → API Keys → Generate a new API key**, and copy it (starts with `xkeysib-`).
+  4. On Render → **Environment**, add:
+
+     | Key | Value |
+     | --- | --- |
+     | `BREVO_API_KEY` | the key from step 3 |
+     | `MAIL_FROM` | `HandleMyDesk <the sender from step 2>` |
+     | `APP_URL` | `https://handlemydesk.vercel.app` (your Vercel address) |
+
+  (Resend works too: set `RESEND_API_KEY` instead of `BREVO_API_KEY`.)
+
+  The link works once, for 30 minutes, and signs the person out everywhere else. If sending ever fails,
+  the app falls back to asking an administrator.
 - **You (the owner) forgot your password:** on Render, change `OWNER_PASSWORD` and save. After the
   restart, sign in with the new one. (A password you changed in the console stays until you change
   `OWNER_PASSWORD` again.)
@@ -199,6 +226,32 @@ Company sign-in (SSO) works for the first office only in this version.
    they turn alerts on again.
 3. Each person: open the app → bell icon → ⚙ settings → **Turn on for this device**.
    On iPhone/iPad this only works after **Share → Add to Home Screen**, opening the app from that icon.
+
+## Keeping data on the free plan (Neon)
+
+Render's free plan has no disk, so on its own every deploy starts empty. With a free Neon
+database, the server copies every change there (about a second later) and downloads everything
+again when it starts on an empty folder. Your data, uploaded files, photos and logos survive deploys.
+
+1. Sign up at <https://neon.tech> (free) and create a project. Pick the region closest to your Render
+   region. Leave the other settings as they are.
+2. On the project dashboard, click **Connect**. Copy the connection string; it looks like
+   `postgresql://neondb_owner:…@ep-….neon.tech/neondb?sslmode=require`. Keep it secret: it is the
+   key to all your data.
+3. On Render → your service → **Environment**, add `DATABASE_URL` with that string, and save.
+4. Render restarts. In **Logs** you should see *"Cloud database is empty: this server's data will be
+   copied there."* From the next restart on: *"Downloaded the data from the cloud database…"*
+5. Check any time: `https://<your-render-address>/api/health` shows `"cloud": {"enabled": true, "waiting": 0, …}`.
+   `waiting` above 0 for a long time, or a `lastError`, means Neon can't be reached.
+
+Good to know:
+- The first time, the server starts from scratch (`INITIAL_ADMIN_*` again); after that, everything is kept.
+- The free Neon plan holds 0.5 GB. Uploaded files count toward it, so keep uploads small.
+- A change made in the very last second before a crash can be lost. Normal deploys and restarts
+  send everything first.
+- Safety: if the server's folder holds *different* data from what's in Neon, it refuses to start
+  rather than overwrite Neon. Don't set `DATABASE_URL` on your own computer with the live database.
+- Moving to a paid Render plan with a disk later? Keep `DATABASE_URL`; it then works as an extra copy.
 
 ## Keeping the free server awake
 

@@ -212,6 +212,22 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   animation: fadeIn 0.14s ease-out;
 }
 
+/* Grey placeholder shapes while something loads */
+@keyframes skeletonShimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+.skeleton {
+  border-radius: 6px;
+  background: linear-gradient(90deg, var(--subtle) 25%, var(--hover) 50%, var(--subtle) 75%);
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1.4s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

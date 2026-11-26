@@ -5,7 +5,7 @@ import { api } from '../../../services/api';
 import { useApp } from '../../../context/AppContext';
 import { useProject } from '../ProjectContext';
 import { StatusBadge, formatDate, isOverdue } from '../../ui/Badges';
-import { Modal } from '../../ui/Modal';
+import { Modal, useDirty } from '../../ui/Modal';
 import { Button, Field, IconButton, inputClass, selectClass, textareaClass, EmptyState } from '../../ui/Field';
 
 const DeliverableEditor: React.FC<{ deliverable: ProjectDeliverable | null; open: boolean; onClose: () => void }> = ({ deliverable, open, onClose }) => {
@@ -14,6 +14,7 @@ const DeliverableEditor: React.FC<{ deliverable: ProjectDeliverable | null; open
   const [form, setForm] = useState({ title: '', description: '', dueDate: '', ownerId: '' });
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const dirty = useDirty(form, open);
 
   useEffect(() => {
     if (!open) return;
@@ -53,6 +54,7 @@ const DeliverableEditor: React.FC<{ deliverable: ProjectDeliverable | null; open
     <Modal
       open={open}
       onClose={onClose}
+      dirty={dirty && !saving}
       title={deliverable ? 'Edit deliverable' : 'New deliverable'}
       footer={
         <>
@@ -94,7 +96,7 @@ const DeliverableEditor: React.FC<{ deliverable: ProjectDeliverable | null; open
 
 export const DeliverablesSection: React.FC = () => {
   const { projectId, deliverables, setDeliverables, canManage, reload } = useProject();
-  const { confirm, showToast } = useApp();
+  const { showToast, deleteWithUndo } = useApp();
   const [editing, setEditing] = useState<ProjectDeliverable | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
 
@@ -109,15 +111,14 @@ export const DeliverablesSection: React.FC = () => {
     }
   };
 
-  const handleDelete = async (d: ProjectDeliverable) => {
-    const ok = await confirm({ title: 'Delete deliverable?', message: `“${d.title}” and its sign-off history will be removed.`, confirmLabel: 'Delete', danger: true });
-    if (!ok) return;
-    try {
-      await api.delete(`/api/projects/${projectId}/deliverables/${d.id}`);
-      setDeliverables((list) => list.filter((x) => x.id !== d.id));
-    } catch (err: any) {
-      showToast(err.message, 'error');
-    }
+  const handleDelete = (d: ProjectDeliverable) => {
+    deleteWithUndo({
+      id: d.id,
+      message: `Deleted deliverable “${d.title}”`,
+      hide: () => setDeliverables((list) => list.filter((x) => x.id !== d.id)),
+      restore: () => setDeliverables((list) => (list.some((x) => x.id === d.id) ? list : [...list, d])),
+      commit: () => api.delete(`/api/projects/${projectId}/deliverables/${d.id}`),
+    });
   };
 
   const sorted = [...deliverables].sort((a, b) => a.dueDate.localeCompare(b.dueDate));

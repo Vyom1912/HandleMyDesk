@@ -19,7 +19,7 @@ const MAX_MB = 25;
 
 export const FilesSection: React.FC = () => {
   const { projectId, files, setFiles, canManage, reload } = useProject();
-  const { currentUser, confirm, showToast } = useApp();
+  const { currentUser, showToast, deleteWithUndo } = useApp();
   const [category, setCategory] = useState<ProjectFile['category']>('general');
   const [filter, setFilter] = useState<'all' | ProjectFile['category']>('all');
   const [uploading, setUploading] = useState<string | null>(null);
@@ -57,16 +57,15 @@ export const FilesSection: React.FC = () => {
     }
   };
 
-  const remove = async (file: ProjectFile) => {
-    const ok = await confirm({ title: 'Delete file?', message: `“${file.name}” will be permanently deleted for everyone on the project.`, confirmLabel: 'Delete', danger: true });
-    if (!ok) return;
-    try {
-      await api.delete(`/api/projects/${projectId}/files/${file.id}`);
-      setFiles((prev) => prev.filter((f) => f.id !== file.id));
-      reload('activity').catch(() => {});
-    } catch (err: any) {
-      showToast(err.message, 'error');
-    }
+  const remove = (file: ProjectFile) => {
+    deleteWithUndo({
+      id: file.id,
+      message: `Deleted “${file.name}”`,
+      hide: () => setFiles((prev) => prev.filter((f) => f.id !== file.id)),
+      restore: () => setFiles((prev) => (prev.some((f) => f.id === file.id) ? prev : [file, ...prev])),
+      commit: () => api.delete(`/api/projects/${projectId}/files/${file.id}`),
+      done: () => reload('activity').catch(() => {}),
+    });
   };
 
   const visible = filter === 'all' ? files : files.filter((f) => f.category === filter);

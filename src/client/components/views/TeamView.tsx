@@ -6,7 +6,7 @@ import { api } from '../../services/api';
 import { User } from '../../../types';
 import { Avatar, Tag, label } from '../ui/Badges';
 import { Button, Field, inputClass, selectClass, SearchInput, toolbarSelectClass } from '../ui/Field';
-import { Modal } from '../ui/Modal';
+import { Modal, useDirty } from '../ui/Modal';
 import { PageShell } from '../layout/PageShell';
 
 const STATUS_DOT = { active: 'bg-tone-green-fg', busy: 'bg-tone-red-fg', away: 'bg-tone-amber-fg' } as const;
@@ -80,6 +80,7 @@ export const TeamView: React.FC = () => {
   const [editing, setEditing] = useState<User | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [form, setForm] = useState<PersonForm>(EMPTY);
+  const dirty = useDirty(form, editorOpen);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [menuFor, setMenuFor] = useState<string | null>(null);
@@ -308,6 +309,7 @@ export const TeamView: React.FC = () => {
       <Modal
         open={editorOpen}
         onClose={() => setEditorOpen(false)}
+        dirty={dirty}
         title={editing ? `Edit ${editing.name}` : 'Add person'}
         description={editing ? undefined : 'Choose their password, or leave it empty for a random temporary one.'}
         size="lg"

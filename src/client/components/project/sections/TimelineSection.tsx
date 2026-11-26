@@ -5,7 +5,7 @@ import { api } from '../../../services/api';
 import { useApp } from '../../../context/AppContext';
 import { useProject } from '../ProjectContext';
 import { StatusBadge, formatDate, isOverdue } from '../../ui/Badges';
-import { Modal } from '../../ui/Modal';
+import { Modal, useDirty } from '../../ui/Modal';
 import { Button, Field, IconButton, inputClass, selectClass, textareaClass, EmptyState } from '../../ui/Field';
 
 const MilestoneEditor: React.FC<{ milestone: ProjectMilestone | null; open: boolean; onClose: () => void }> = ({ milestone, open, onClose }) => {
@@ -14,6 +14,7 @@ const MilestoneEditor: React.FC<{ milestone: ProjectMilestone | null; open: bool
   const [form, setForm] = useState({ title: '', description: '', targetDate: '', status: 'pending', progress: 0, ownerId: '' });
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const dirty = useDirty(form, open);
 
   useEffect(() => {
     if (!open) return;
@@ -55,6 +56,7 @@ const MilestoneEditor: React.FC<{ milestone: ProjectMilestone | null; open: bool
     <Modal
       open={open}
       onClose={onClose}
+      dirty={dirty && !saving}
       title={milestone ? 'Edit milestone' : 'New milestone'}
       footer={
         <>
@@ -106,22 +108,21 @@ const MilestoneEditor: React.FC<{ milestone: ProjectMilestone | null; open: bool
 
 export const TimelineSection: React.FC = () => {
   const { projectId, milestones, setMilestones, canManage, reload } = useProject();
-  const { confirm, showToast } = useApp();
+  const { deleteWithUndo } = useApp();
   const [editing, setEditing] = useState<ProjectMilestone | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
 
   const sorted = [...milestones].sort((a, b) => a.targetDate.localeCompare(b.targetDate));
 
-  const handleDelete = async (m: ProjectMilestone) => {
-    const ok = await confirm({ title: 'Delete milestone?', message: `“${m.title}” will be removed from the timeline.`, confirmLabel: 'Delete', danger: true });
-    if (!ok) return;
-    try {
-      await api.delete(`/api/projects/${projectId}/milestones/${m.id}`);
-      setMilestones((list) => list.filter((x) => x.id !== m.id));
-      reload('activity').catch(() => {});
-    } catch (err: any) {
-      showToast(err.message, 'error');
-    }
+  const handleDelete = (m: ProjectMilestone) => {
+    deleteWithUndo({
+      id: m.id,
+      message: `Deleted milestone “${m.title}”`,
+      hide: () => setMilestones((list) => list.filter((x) => x.id !== m.id)),
+      restore: () => setMilestones((list) => (list.some((x) => x.id === m.id) ? list : [...list, m])),
+      commit: () => api.delete(`/api/projects/${projectId}/milestones/${m.id}`),
+      done: () => reload('activity').catch(() => {}),
+    });
   };
 
   const openEditor = (m: ProjectMilestone | null) => {

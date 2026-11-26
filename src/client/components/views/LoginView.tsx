@@ -4,6 +4,11 @@ import { AlertCircle } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Field, inputClass, Button } from '../ui/Field';
 import { PasswordInput } from '../ui/PasswordInput';
+import { ThemeToggle } from '../ui/ThemeToggle';
+import { BrandMark } from '../ui/BrandMark';
+import { WakingUpNote } from '../ui/Skeleton';
+import { applyBrandColor, rememberedOfficeSlug, rememberOfficeSlug } from '../../services/appearance';
+import { OfficeBrand } from '../../../types';
 
 // Seeded accounts, shown only in development builds to make testing roles quick
 const DEMO_ACCOUNTS = [
@@ -30,8 +35,41 @@ const writeRemembered = (email: string | null) => {
   }
 };
 
+/**
+ * An office's own sign-in link (https://<site>/?office=acme) shows its logo, name and colour.
+ * The office is remembered on this device, so the next visit looks the same.
+ */
+function useOfficeBrand(): [OfficeBrand | null, () => void] {
+  const [brand, setBrand] = useState<OfficeBrand | null>(null);
+  useEffect(() => {
+    const fromLink = new URLSearchParams(window.location.search).get('office')?.trim().toLowerCase();
+    const slug = fromLink || rememberedOfficeSlug();
+    if (!slug) return;
+    api
+      .get<OfficeBrand>(`/api/brand/${encodeURIComponent(slug)}`)
+      .then((b) => {
+        setBrand(b);
+        applyBrandColor(b.color);
+        rememberOfficeSlug(b.slug);
+        document.title = `Sign in · ${b.name}`;
+      })
+      .catch(() => {
+        // Unknown or renamed office: plain sign-in page
+        if (!fromLink) rememberOfficeSlug(null);
+      });
+  }, []);
+  const forget = () => {
+    rememberOfficeSlug(null);
+    applyBrandColor(null);
+    document.title = 'HandleMyDesk';
+    setBrand(null);
+  };
+  return [brand, forget];
+}
+
 export const LoginView: React.FC = () => {
-  const { login } = useApp();
+  const { login, theme, setTheme } = useApp();
+  const [brand, forgetBrand] = useOfficeBrand();
   const [email, setEmail] = useState(readRemembered);
   const [remember, setRemember] = useState(() => readRemembered() !== '');
   const [password, setPassword] = useState('');
@@ -75,12 +113,14 @@ export const LoginView: React.FC = () => {
 
   // "Forgot password?": asks whoever can reset it (office admin, or HandleMyDesk for admins)
   const [forgot, setForgot] = useState<'closed' | 'open' | 'sent'>('closed');
+  const [helpVia, setHelpVia] = useState<'email' | 'admin'>('admin');
   const askForReset = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSubmitting(true);
     try {
-      await api.post('/api/auth/forgot', { email: email.trim() });
+      const res = await api.post<{ via?: 'email' | 'admin' }>('/api/auth/forgot', { email: email.trim() });
+      setHelpVia(res.via === 'email' ? 'email' : 'admin');
       setForgot('sent');
     } catch (err: any) {
       setError(err.message || 'Could not send the request');
@@ -96,17 +136,24 @@ export const LoginView: React.FC = () => {
           <h1 className="text-2xl font-semibold tracking-tight text-fg mb-1">Forgot your password?</h1>
           {forgot === 'sent' ? (
             <div className="space-y-4">
-              <p className="text-sm text-fg-muted" role="status">
-                Done. If <strong className="text-fg">{email.trim()}</strong> has an account, the people who can reset it have been told: your office administrator, or
-                HandleMyDesk if you are the administrator. They will give you a new password, usually by phone or message.
-              </p>
+              {helpVia === 'email' ? (
+                <p className="text-sm text-fg-muted" role="status">
+                  Check your inbox. If <strong className="text-fg">{email.trim()}</strong> has an account, we've emailed it a link to choose a new password. The link works
+                  for 30 minutes. Nothing after a few minutes? Look in your spam folder, or ask your office administrator to reset it.
+                </p>
+              ) : (
+                <p className="text-sm text-fg-muted" role="status">
+                  Done. If <strong className="text-fg">{email.trim()}</strong> has an account, the people who can reset it have been told: your office administrator, or
+                  HandleMyDesk if you are the administrator. They will give you a new password, usually by phone or message.
+                </p>
+              )}
               <Button className="w-full h-9" onClick={() => setForgot('closed')}>
                 Back to sign in
               </Button>
             </div>
           ) : (
             <form onSubmit={askForReset} className="space-y-4" noValidate>
-              <p className="text-sm text-fg-muted">Enter your work email. We'll ask the person who can reset your password to do it.</p>
+              <p className="text-sm text-fg-muted">Enter your work email. We'll send you a link to choose a new password, or ask the person who can reset it.</p>
               {error && (
                 <div role="alert" className="flex items-start gap-2 p-2.5 rounded-md bg-tone-red-bg text-sm text-tone-red-fg">
                   <AlertCircle size={15} className="shrink-0 mt-0.5" />
@@ -114,7 +161,7 @@ export const LoginView: React.FC = () => {
                 </div>
               )}
               <Field label="Email">
-                <input type="email" autoComplete="username" required autoFocus value={email} onChange={(e) => setEmail(e.target.value)} className={inputClass} />
+                <input type="email" inputMode="email" autoCapitalize="none" autoCorrect="off" autoComplete="username" required autoFocus value={email} onChange={(e) => setEmail(e.target.value)} className={inputClass} />
               </Field>
               <Button type="submit" className="w-full h-9" disabled={submitting || !email.trim()}>
                 {submitting ? 'Sending…' : 'Ask for a password reset'}
@@ -130,13 +177,12 @@ export const LoginView: React.FC = () => {
   }
 
   return (
-    <main className="min-h-full w-full flex items-center justify-center bg-canvas px-4 py-12">
+    <main className="relative min-h-full w-full flex items-center justify-center bg-canvas px-4 py-12">
+      <ThemeToggle theme={theme} setTheme={setTheme} className="absolute top-3 right-3" />
       <div className="w-full max-w-[340px]">
         <div className="mb-8">
-          <span className="w-8 h-8 rounded-md bg-fg text-canvas text-sm font-bold flex items-center justify-center mb-6" aria-hidden="true">
-            H
-          </span>
-          <h1 className="text-2xl font-semibold tracking-tight text-fg">Sign in to HandleMyDesk</h1>
+          <BrandMark brand={brand} className="mb-6" />
+          <h1 className="text-2xl font-semibold tracking-tight text-fg">Sign in to {brand?.name ?? 'HandleMyDesk'}</h1>
           <p className="text-sm text-fg-muted mt-1">{sso.enabled ? `Use your ${sso.label} account, or your HandleMyDesk password.` : 'Use your work email and password.'}</p>
         </div>
 
@@ -197,7 +243,17 @@ export const LoginView: React.FC = () => {
               {submitting ? 'Signing in…' : 'Continue'}
             </Button>
           )}
+          {submitting && <WakingUpNote after={5000} />}
         </form>
+
+        {brand && (
+          <p className="mt-6 text-center text-xs text-fg-faint">
+            Not at {brand.name}?{' '}
+            <button type="button" onClick={forgetBrand} className="underline underline-offset-2 hover:text-fg">
+              Use the general sign-in
+            </button>
+          </p>
+        )}
 
         {import.meta.env.DEV && (
           <div className="mt-10 pt-5 border-t border-line text-[13px] text-fg-muted space-y-2.5">

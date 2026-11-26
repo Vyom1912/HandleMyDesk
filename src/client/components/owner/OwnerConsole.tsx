@@ -1,9 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Building2, LifeBuoy, ScrollText, LogOut, Plus, LogIn, Pause, Play, Pencil, ArrowLeft, KeyRound, RefreshCw, Copy, Check } from 'lucide-react';
+import { Building2, LifeBuoy, ScrollText, LogOut, Plus, LogIn, Pause, Play, Pencil, ArrowLeft, KeyRound, RefreshCw, Copy, Check, Link2 } from 'lucide-react';
+import { ThemeToggle } from '../ui/ThemeToggle';
+import { CardsSkeleton, ListSkeleton } from '../ui/Skeleton';
+import { useThemePreference } from '../../services/appearance';
 import { PasswordInput } from '../ui/PasswordInput';
 import { OfficeSummary, OwnerProfile, OwnerLogEntry, SupportTicket, SupportCategory } from '../../../types';
 import { api, setStoredToken, enterOfficeAsSupport, UNAUTHORIZED_EVENT } from '../../services/api';
-import { Modal } from '../ui/Modal';
+import { Modal, useDirty } from '../ui/Modal';
 import { Field, inputClass, textareaClass, selectClass, Button, Segmented, EmptyState } from '../ui/Field';
 import { Tag, timeAgo, formatDateTime } from '../ui/Badges';
 
@@ -176,6 +179,7 @@ export const OwnerConsole: React.FC = () => {
   const [tickets, setTickets] = useState<SupportTicket[] | null>(null);
   const [toast, setToast] = useState<{ message: string; error?: boolean } | null>(null);
   const [passwordOpen, setPasswordOpen] = useState(false);
+  const [theme, setTheme] = useThemePreference();
 
   const notifyUser = useCallback((message: string, error = false) => {
     setToast({ message, error });
@@ -230,6 +234,7 @@ export const OwnerConsole: React.FC = () => {
             <div className="text-sm font-semibold leading-tight truncate">HandleMyDesk owner console</div>
             <div className="text-xs text-fg-faint leading-tight truncate">{me ? `${me.name} · ${me.email}` : ' '}</div>
           </div>
+          <ThemeToggle theme={theme} setTheme={setTheme} />
           <Button variant="ghost" size="sm" onClick={refresh} aria-label="Refresh">
             <RefreshCw size={14} />
           </Button>
@@ -284,6 +289,44 @@ export const OwnerConsole: React.FC = () => {
 // OFFICES
 // ==========================================
 
+/** The office's logo, or its first letter in its colour. */
+const OfficeMark: React.FC<{ office: OfficeSummary }> = ({ office }) =>
+  office.logoUrl ? (
+    <img src={office.logoUrl} alt="" className="w-9 h-9 rounded-md object-contain border border-line bg-surface shrink-0" />
+  ) : (
+    <span
+      className="w-9 h-9 rounded-md flex items-center justify-center text-sm font-bold text-white shrink-0"
+      style={{ background: office.brandColor ?? 'var(--fg-muted)' }}
+      aria-hidden="true"
+    >
+      {office.name.trim()[0]?.toUpperCase()}
+    </span>
+  );
+
+/** The office's own sign-in page (shows its logo and colour), to send to its people. */
+const CopySignInLink: React.FC<{ slug: string }> = ({ slug }) => {
+  const [copied, setCopied] = useState(false);
+  const link = `${window.location.origin}/?office=${slug}`;
+  return (
+    <Button
+      size="sm"
+      variant="secondary"
+      title={link}
+      onClick={() =>
+        navigator.clipboard
+          ?.writeText(link)
+          .then(() => {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+          })
+          .catch(() => {})
+      }
+    >
+      {copied ? <Check size={14} /> : <Link2 size={14} />} {copied ? 'Copied' : 'Sign-in link'}
+    </Button>
+  );
+};
+
 const Stat: React.FC<{ label: string; value: React.ReactNode; tone?: 'red' }> = ({ label, value, tone }) => (
   <div className="min-w-0">
     <div className={`text-base font-semibold tabular-nums ${tone === 'red' ? 'text-tone-red-fg' : 'text-fg'}`}>{value}</div>
@@ -303,7 +346,7 @@ const OfficesTab: React.FC<{
   const [pausing, setPausing] = useState<OfficeSummary | null>(null);
   const [resetting, setResetting] = useState<ResetTarget | null>(null);
 
-  if (!offices) return <p className="text-sm text-fg-muted" role="status">Loading offices…</p>;
+  if (!offices) return <CardsSkeleton cards={4} label="Loading offices" />;
 
   const totals = offices.reduce(
     (t, o) => ({ people: t.people + o.people, overdue: t.overdue + o.overdueTasks, problems: t.problems + o.openTickets }),
@@ -343,6 +386,7 @@ const OfficesTab: React.FC<{
         {offices.map((o) => (
           <li key={o.id} className={`p-4 rounded-lg border bg-surface ${o.status === 'suspended' ? 'border-tone-amber-fg/40' : 'border-line'}`}>
             <div className="flex items-start gap-2">
+              <OfficeMark office={o} />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
                   <h2 className="text-[15px] font-semibold truncate">{o.name}</h2>
@@ -382,6 +426,7 @@ const OfficesTab: React.FC<{
               <Button size="sm" variant="secondary" onClick={() => setResetting({ officeId: o.id, officeName: o.name, people: o.admins })}>
                 <KeyRound size={14} /> Admin password
               </Button>
+              <CopySignInLink slug={o.slug} />
               <span className="ml-auto text-xs text-fg-faint">{o.lastActivity ? `Active ${timeAgo(o.lastActivity)}` : 'No activity yet'}</span>
             </div>
           </li>
@@ -427,6 +472,7 @@ const AddOfficeModal: React.FC<{ open: boolean; onClose: () => void; onAdded: ()
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [created, setCreated] = useState<{ name: string; adminEmail: string; temporaryPassword: string; mustChangePassword: boolean } | null>(null);
+  const dirty = useDirty(form, open);
 
   const close = () => {
     setForm(EMPTY_OFFICE);
@@ -457,6 +503,7 @@ const AddOfficeModal: React.FC<{ open: boolean; onClose: () => void; onAdded: ()
     <Modal
       open={open}
       onClose={close}
+      dirty={dirty && !created && !saving}
       title={created ? `${created.name} is ready` : 'Add an office'}
       description={created ? undefined : 'A new customer company. It starts empty, with one administrator who adds their own staff.'}
       footer={
@@ -595,7 +642,7 @@ const ProblemsTab: React.FC<{
     if (selected?.unreadByOwner) api.post(`/api/owner/tickets/${selected.id}/read`).then(onChanged).catch(() => undefined);
   }, [selected?.id, selected?.unreadByOwner, onChanged]);
 
-  if (!tickets) return <p className="text-sm text-fg-muted" role="status">Loading…</p>;
+  if (!tickets) return <ListSkeleton rows={4} label="Loading problems" />;
 
   const send = async () => {
     if (!selected || !reply.trim()) return;
@@ -748,7 +795,7 @@ const LogTab: React.FC = () => {
   useEffect(() => {
     api.get<OwnerLogEntry[]>('/api/owner/log').then(setLog).catch(() => setLog([]));
   }, []);
-  if (!log) return <p className="text-sm text-fg-muted" role="status">Loading…</p>;
+  if (!log) return <ListSkeleton rows={6} label="Loading the log" />;
   return (
     <>
       <h1 className="text-lg font-semibold">Log</h1>

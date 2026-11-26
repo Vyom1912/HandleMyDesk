@@ -7,6 +7,7 @@ import crypto from 'crypto';
 import { AsyncLocalStorage } from 'async_hooks';
 import { IS_TEST, IS_PROD, DATA_DIR, DB_PATH, LEGACY_DB_PATH, LOCK_FILE, BACKUP_DIR } from './paths';
 import { createBackup, pruneBackups, BackupInfo } from './backups';
+import { registerDatabase, recordRow, flushBeforeExit, MirrorTable } from './cloud';
 import {
   User,
   Client,
@@ -1411,10 +1412,13 @@ export class Database {
   public readonly backupDir: string;
   // Set for a brand-new office: its first administrator (instead of demo data or .env settings)
   private readonly firstAdmin?: FirstAdmin;
+  // Which office this is, for the copy kept in the cloud database (cloud.ts)
+  private readonly office: string;
 
-  constructor(file: string = DB_FILE, opts: { backupDir?: string; firstAdmin?: FirstAdmin } = {}) {
+  constructor(file: string = DB_FILE, opts: { backupDir?: string; firstAdmin?: FirstAdmin; office?: string } = {}) {
     this.backupDir = opts.backupDir ?? BACKUP_DIR;
     this.firstAdmin = opts.firstAdmin;
+    this.office = opts.office ?? 'main';
     if (!IS_TEST) fs.mkdirSync(file === ':memory:' ? DATA_DIR : path.dirname(file), { recursive: true });
     this.sql = new DatabaseSync(file);
     if (!IS_TEST) this.sql.exec('PRAGMA journal_mode = WAL;');
@@ -1445,6 +1449,25 @@ export class Database {
       record.run(m.version, m.name, new Date().toISOString());
       if (existingUsers > 0) console.log(`Database updated: ${m.version}. ${m.name}`);
     }
+    // Copied in full to the cloud database once, then change by change
+    if (file !== ':memory:') registerDatabase(this.office, file, this);
+  }
+
+  /** Every table (with its CREATE statement) and every row, for the cloud copy. */
+  public mirrorSnapshot(): MirrorTable[] {
+    const objects = this.sql
+      .prepare("SELECT type, name, sql FROM sqlite_master WHERE type IN ('table', 'index') AND sql IS NOT NULL AND name NOT LIKE 'sqlite_%'")
+      .all() as Array<{ type: string; name: string; sql: string }>;
+    return objects.map((o) => {
+      if (o.type === 'index') return { name: o.name, sql: o.sql, key: '', rows: [] };
+      const pk = (this.sql.prepare(`PRAGMA table_info("${o.name}")`).all() as Array<{ name: string; pk: number }>).find((c) => c.pk === 1);
+      return { name: o.name, sql: o.sql, key: pk?.name ?? 'rowid', rows: this.sql.prepare(`SELECT * FROM "${o.name}"`).all() as Array<Record<string, unknown>> };
+    });
+  }
+
+  private mirrorCredential(userId: string) {
+    const row = this.sql.prepare('SELECT * FROM credentials WHERE user_id = ?').get(userId) as Record<string, unknown> | undefined;
+    recordRow(this.office, 'credentials', userId, row ?? null);
   }
 
   public schemaVersion(): number {
@@ -1529,6 +1552,7 @@ export class Database {
   }
 
   public save() {
+    const changes: Array<[string, string, Record<string, unknown> | null]> = [];
     this.sql.exec('BEGIN');
     try {
       for (const c of COLLECTIONS) {
@@ -1541,15 +1565,22 @@ export class Database {
           const json = JSON.stringify(doc);
           const key = `${pos}|${json}`;
           after.set(id, key);
-          if (before.get(id) !== key) upsert.run(id, pos, json);
+          if (before.get(id) !== key) {
+            upsert.run(id, pos, json);
+            changes.push([c, id, { id, pos, data: json }]);
+          }
         });
         const remove = this.sql.prepare(`DELETE FROM ${c} WHERE id = ?`);
         for (const id of before.keys()) {
-          if (!after.has(id)) remove.run(id);
+          if (!after.has(id)) {
+            remove.run(id);
+            changes.push([c, id, null]);
+          }
         }
         this.persisted.set(c, after);
       }
       this.sql.exec('COMMIT');
+      for (const [table, id, row] of changes) recordRow(this.office, table, id, row);
     } catch (err) {
       this.sql.exec('ROLLBACK');
       // In-memory state may now be ahead of disk; force a full rewrite on the next save
@@ -1572,6 +1603,7 @@ export class Database {
 
   public bumpSessionVersion(userId: string): number {
     this.sql.prepare('UPDATE credentials SET session_version = session_version + 1 WHERE user_id = ?').run(userId);
+    this.mirrorCredential(userId);
     return this.getAuthState(userId).sessionVersion;
   }
 
@@ -1594,6 +1626,7 @@ export class Database {
         'INSERT INTO credentials (user_id, password_hash, must_change) VALUES (?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET password_hash = excluded.password_hash, must_change = excluded.must_change'
       )
       .run(userId, hash, mustChange ? 1 : 0);
+    this.mirrorCredential(userId);
   }
 
   public close() {
@@ -1648,7 +1681,15 @@ function acquireSingleInstanceLock() {
     }
   };
   process.on('exit', release);
-  for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP'] as const) process.on(signal, () => process.exit(0));
+  // Render sends SIGTERM before a deploy: send the last changes to the cloud database first
+  let stopping = false;
+  for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP'] as const) {
+    process.on(signal, () => {
+      if (stopping) return;
+      stopping = true;
+      void flushBeforeExit().finally(() => process.exit(0));
+    });
+  }
 }
 
 // The product was renamed: move the old database file (with its WAL journal) to the new name.

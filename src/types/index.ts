@@ -267,6 +267,20 @@ export interface OfficeSummary {
   overdueTasks: number;
   lastActivity: string | null;
   openTickets: number;
+  /** Used in the office's own sign-in link: https://<site>/?office=<slug> */
+  slug: string;
+  brandColor?: string;
+  logoUrl?: string;
+}
+
+/** What an office looks like: shown on its sign-in page and inside the app. */
+export interface OfficeBrand {
+  id: string;
+  name: string;
+  slug: string;
+  /** #rrggbb, replaces the blue accent colour */
+  color?: string;
+  logoUrl?: string;
 }
 
 export interface OwnerProfile {

@@ -4,7 +4,7 @@ import { ProjectLink } from '../../../../types';
 import { api } from '../../../services/api';
 import { useApp } from '../../../context/AppContext';
 import { useProject } from '../ProjectContext';
-import { Modal } from '../../ui/Modal';
+import { Modal, useDirty } from '../../ui/Modal';
 import { Button, Field, IconButton, inputClass, selectClass, SectionHeader, EmptyState } from '../../ui/Field';
 
 export const LINK_CATEGORIES: Array<{ value: ProjectLink['category']; label: string; icon: React.ElementType; placeholder: string }> = [
@@ -44,6 +44,7 @@ export const LinkEditor: React.FC<{ link: ProjectLink | null; defaultCategory?: 
   const [form, setForm] = useState({ title: '', url: '', category: defaultCategory as ProjectLink['category'], description: '' });
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const dirty = useDirty(form, open);
 
   useEffect(() => {
     if (!open) return;
@@ -79,6 +80,7 @@ export const LinkEditor: React.FC<{ link: ProjectLink | null; defaultCategory?: 
     <Modal
       open={open}
       onClose={onClose}
+      dirty={dirty && !saving}
       title={link ? 'Edit link' : 'Add link'}
       footer={
         <>
@@ -118,19 +120,18 @@ export const LinkEditor: React.FC<{ link: ProjectLink | null; defaultCategory?: 
 
 export const LinksSection: React.FC = () => {
   const { projectId, links, setLinks, canManage } = useProject();
-  const { currentUser, confirm, showToast } = useApp();
+  const { currentUser, deleteWithUndo } = useApp();
   const [editing, setEditing] = useState<ProjectLink | null>(null);
   const [editorOpen, setEditorOpen] = useState(false);
 
-  const remove = async (link: ProjectLink) => {
-    const ok = await confirm({ title: 'Remove link?', message: `“${link.title}” will be removed from the project.`, confirmLabel: 'Remove', danger: true });
-    if (!ok) return;
-    try {
-      await api.delete(`/api/projects/${projectId}/links/${link.id}`);
-      setLinks((list) => list.filter((l) => l.id !== link.id));
-    } catch (err: any) {
-      showToast(err.message, 'error');
-    }
+  const remove = (link: ProjectLink) => {
+    deleteWithUndo({
+      id: link.id,
+      message: `Removed link “${link.title}”`,
+      hide: () => setLinks((list) => list.filter((l) => l.id !== link.id)),
+      restore: () => setLinks((list) => (list.some((l) => l.id === link.id) ? list : [...list, link])),
+      commit: () => api.delete(`/api/projects/${projectId}/links/${link.id}`),
+    });
   };
 
   const grouped = LINK_CATEGORIES.map((c) => ({ ...c, items: links.filter((l) => l.category === c.value) })).filter((g) => g.items.length > 0);

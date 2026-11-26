@@ -4,7 +4,7 @@ import { Task, TaskSubtask } from '../../../types';
 import { api } from '../../services/api';
 import { useApp } from '../../context/AppContext';
 import { useProject } from './ProjectContext';
-import { Modal } from '../ui/Modal';
+import { Modal, useDirty } from '../ui/Modal';
 import { Field, inputClass, selectClass, textareaClass, Button, IconButton } from '../ui/Field';
 import { TASK_STATUS_OPTIONS } from './sections/TasksSection';
 
@@ -33,6 +33,7 @@ export const TaskEditorModal: React.FC<Props> = ({ open, task, defaults, onClose
   const [subtaskInput, setSubtaskInput] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const dirty = useDirty({ title, description, status, priority, assigneeId, dueDate, tags, subtasks, tagInput, subtaskInput }, open);
 
   useEffect(() => {
     if (!open) return;
@@ -103,6 +104,7 @@ export const TaskEditorModal: React.FC<Props> = ({ open, task, defaults, onClose
     <Modal
       open={open}
       onClose={onClose}
+      dirty={dirty && !saving}
       title={task ? 'Edit task' : 'New task'}
       size="lg"
       footer={

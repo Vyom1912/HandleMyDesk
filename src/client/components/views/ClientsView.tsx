@@ -3,7 +3,7 @@ import { Plus, Pencil } from 'lucide-react';
 import { Client } from '../../../types';
 import { api } from '../../services/api';
 import { useApp } from '../../context/AppContext';
-import { Modal } from '../ui/Modal';
+import { Modal, useDirty } from '../ui/Modal';
 import { Field, inputClass, selectClass, textareaClass, Button, IconButton, SearchInput, toolbarSelectClass } from '../ui/Field';
 import { StatusBadge } from '../ui/Badges';
 import { PageShell } from '../layout/PageShell';
@@ -25,6 +25,7 @@ export const ClientsView: React.FC = () => {
   const [form, setForm] = useState<ClientForm>(EMPTY);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const dirty = useDirty(form, editorOpen);
 
   const canEdit = currentUser?.role === 'admin' || currentUser?.role === 'pm';
   const isAdmin = currentUser?.role === 'admin';
@@ -202,6 +203,7 @@ export const ClientsView: React.FC = () => {
       <Modal
         open={editorOpen}
         onClose={() => setEditorOpen(false)}
+        dirty={dirty && !saving}
         title={editing ? `Edit ${editing.name}` : 'New client'}
         size="lg"
         footer={

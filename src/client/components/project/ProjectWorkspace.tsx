@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Star, Link as LinkIcon, AlertCircle, FileText } from 'lucide-react';
 import {
   Project,
@@ -35,6 +35,8 @@ import { TeamSection } from './sections/TeamSection';
 import { DeliverablesSection } from './sections/DeliverablesSection';
 import { ActivitySection } from './sections/ActivitySection';
 import { SettingsSection } from './sections/SettingsSection';
+import { ProjectSkeleton } from '../ui/Skeleton';
+import { withoutPending } from '../../services/undo';
 import { ReportSection } from './sections/ReportSection';
 
 const SECTION_COMPONENTS: Record<ProjectSection, React.FC> = {
@@ -77,7 +79,7 @@ const ENDPOINTS: Record<ProjectResource, string> = {
 };
 
 export const ProjectWorkspace: React.FC<{ projectId: string }> = ({ projectId }) => {
-  const { currentUser, route, openProject, navigate, showToast, subscribe, refreshProjects, favoriteIds, toggleFavorite } = useApp();
+  const { currentUser, route, openProject, navigate, showToast, deleteWithUndo, subscribe, refreshProjects, favoriteIds, toggleFavorite } = useApp();
   const activeSection: ProjectSection = route.view === 'project' ? route.section : 'overview';
   const openTaskId = route.view === 'project' ? route.taskId : undefined;
 
@@ -98,20 +100,19 @@ export const ProjectWorkspace: React.FC<{ projectId: string }> = ({ projectId })
   const [activityHasMore, setActivityHasMore] = useState(false);
 
   const [editor, setEditor] = useState<{ task?: Task; defaults?: Partial<Task> } | null>(null);
-  // Tasks hidden locally while their delete can still be undone
-  const pendingDeletes = useRef(new Map<string, ReturnType<typeof setTimeout>>());
 
   const setters: Record<ProjectResource, (data: any) => void> = {
-    tasks: (list: Task[]) => setTasks(list.filter((t) => !pendingDeletes.current.has(t.id))),
-    milestones: setMilestones,
-    deliverables: setDeliverables,
+    // Leave out anything deleted a moment ago whose Undo is still showing
+    tasks: (list: Task[]) => setTasks(withoutPending(list)),
+    milestones: (list: ProjectMilestone[]) => setMilestones(withoutPending(list)),
+    deliverables: (list: ProjectDeliverable[]) => setDeliverables(withoutPending(list)),
     chat: (page: Page<ProjectChatMessage>) => {
       setChatMessages((prev) => mergeById(prev, page.items, false));
       setChatHasMore((more) => more || page.hasMore);
     },
-    files: setFiles,
-    notes: setNotes,
-    links: setLinks,
+    files: (list: ProjectFile[]) => setFiles(withoutPending(list)),
+    notes: (list: ProjectNote[]) => setNotes(withoutPending(list)),
+    links: (list: ProjectLink[]) => setLinks(withoutPending(list)),
     team: setTeamMembers,
     activity: (page: Page<ProjectActivity>) => {
       setActivities((prev) => mergeById(prev, page.items, true));
@@ -171,16 +172,6 @@ export const ProjectWorkspace: React.FC<{ projectId: string }> = ({ projectId })
     return () => window.removeEventListener(NEW_TASK_EVENT, onNewTask);
   }, []);
 
-  // Flush pending deletes if the project closes before the undo window ends
-  useEffect(() => {
-    const pending = pendingDeletes.current;
-    return () => {
-      pending.forEach((timer) => clearTimeout(timer));
-      pending.forEach((_, taskId) => api.delete(`/api/projects/${projectId}/tasks/${taskId}`).catch(() => {}));
-      pending.clear();
-    };
-  }, [projectId]);
-
   const projectsCrumb = (
     <button onClick={() => navigate({ view: 'projects' })} className="py-2.5 -my-2.5 pointer-fine:py-0 pointer-fine:my-0 hover:text-fg hover:underline underline-offset-2">
       Projects
@@ -191,10 +182,7 @@ export const ProjectWorkspace: React.FC<{ projectId: string }> = ({ projectId })
     return (
       <div className="flex-1 flex flex-col min-h-0">
         <TopBar crumbs={[projectsCrumb, '…']} />
-        <div className="flex-1 flex items-center justify-center text-fg-muted text-sm" role="status">
-          <div className="w-5 h-5 border-2 border-line-strong border-t-fg rounded-full animate-spin" aria-hidden="true"></div>
-          <span className="sr-only">Loading project</span>
-        </div>
+        <ProjectSkeleton />
       </div>
     );
   }
@@ -229,25 +217,13 @@ export const ProjectWorkspace: React.FC<{ projectId: string }> = ({ projectId })
 
   const deleteTask = (task: Task) => {
     const index = tasks.findIndex((t) => t.id === task.id);
-    setTasks((list) => list.filter((t) => t.id !== task.id));
-    const timer = setTimeout(async () => {
-      pendingDeletes.current.delete(task.id);
-      try {
-        await api.delete(`/api/projects/${projectId}/tasks/${task.id}`);
-        reload('project', 'activity').catch(() => {});
-      } catch (err: any) {
-        setTasks((list) => [...list.slice(0, index), task, ...list.slice(index)]);
-        showToast(err.message || 'Failed to delete task', 'error');
-      }
-    }, 6000);
-    pendingDeletes.current.set(task.id, timer);
-    showToast(`Deleted “${task.title}”`, 'info', {
-      label: 'Undo',
-      onClick: () => {
-        clearTimeout(timer);
-        pendingDeletes.current.delete(task.id);
-        setTasks((list) => [...list.slice(0, index), task, ...list.slice(index)]);
-      },
+    deleteWithUndo({
+      id: task.id,
+      message: `Deleted “${task.title}”`,
+      hide: () => setTasks((list) => list.filter((t) => t.id !== task.id)),
+      restore: () => setTasks((list) => (list.some((t) => t.id === task.id) ? list : [...list.slice(0, index), task, ...list.slice(index)])),
+      commit: () => api.delete(`/api/projects/${projectId}/tasks/${task.id}`),
+      done: () => reload('project', 'activity').catch(() => {}),
     });
   };
 

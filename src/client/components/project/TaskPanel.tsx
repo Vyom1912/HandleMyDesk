@@ -183,7 +183,7 @@ const MentionInput: React.FC<{
 };
 
 export const TaskPanel: React.FC<{ taskId: string; onClose: () => void }> = ({ taskId, onClose }) => {
-  const { currentUser, allEmployees, subscribe, showToast, confirm } = useApp();
+  const { currentUser, allEmployees, subscribe, showToast, deleteWithUndo } = useApp();
   const { projectId, project, tasks, teamMembers, updateTask, deleteTask, canManage } = useProject();
   const task = tasks.find((t) => t.id === taskId);
   const ref = useRef<HTMLDivElement>(null);
@@ -281,15 +281,15 @@ export const TaskPanel: React.FC<{ taskId: string; onClose: () => void }> = ({ t
     }
   };
 
-  const removeComment = async (c: TaskComment) => {
-    const ok = await confirm({ title: 'Delete comment?', message: 'This comment will be removed for everyone.', confirmLabel: 'Delete', danger: true });
-    if (!ok) return;
-    try {
-      await api.delete(`${base}/${c.id}`);
-      setComments((list) => list.filter((x) => x.id !== c.id));
-    } catch (err: any) {
-      showToast(err.message, 'error');
-    }
+  const removeComment = (c: TaskComment) => {
+    const index = comments.findIndex((x) => x.id === c.id);
+    deleteWithUndo({
+      id: c.id,
+      message: 'Comment deleted',
+      hide: () => setComments((list) => list.filter((x) => x.id !== c.id)),
+      restore: () => setComments((list) => (list.some((x) => x.id === c.id) ? list : [...list.slice(0, index), c, ...list.slice(index)])),
+      commit: () => api.delete(`${base}/${c.id}`),
+    });
   };
 
   return (

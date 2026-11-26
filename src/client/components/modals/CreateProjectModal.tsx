@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Client, Project, ProjectTemplate } from '../../../types';
 import { api } from '../../services/api';
-import { Modal } from '../ui/Modal';
+import { Modal, useDirty } from '../ui/Modal';
 import { Field, inputClass, selectClass, textareaClass, Button } from '../ui/Field';
 import { Avatar } from '../ui/Badges';
 
@@ -27,6 +27,7 @@ export const CreateProjectModal: React.FC = () => {
   const [selectedTeam, setSelectedTeam] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const dirty = useDirty({ name, code, clientName, category, priority, budget, startDate, targetDate, description, templateId }, isCreateProjectOpen);
 
   useEffect(() => {
     if (!isCreateProjectOpen) return;
@@ -114,6 +115,7 @@ export const CreateProjectModal: React.FC = () => {
   return (
     <Modal
       open={isCreateProjectOpen}
+      dirty={dirty && !submitting}
       onClose={close}
       title="New project"
       description="You'll be the project lead. Links and a full description can be added on the project page."

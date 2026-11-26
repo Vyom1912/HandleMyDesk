@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, RefreshCw, LogOut, LifeBuoy } from 'lucide-react';
 import { SupportModal } from './components/modals/SupportModal';
 import { useOffice } from './services/office';
-import { tokenClaims, returnToOwnerConsole } from './services/api';
+import { returnToOwnerConsole } from './services/api';
 import { useApp } from './context/AppContext';
 import { Sidebar } from './components/layout/Sidebar';
 import { BottomNav } from './components/layout/BottomNav';
@@ -23,15 +23,7 @@ import { ConfirmDialog, ToastBanner } from './components/ui/Feedback';
 import { Button } from './components/ui/Field';
 import { useDialogBehavior } from './components/ui/Modal';
 import { useKeyboardShortcuts, ShortcutsModal } from './components/ui/Shortcuts';
-
-const Spinner: React.FC<{ label: string }> = ({ label }) => (
-  <div className="flex-1 flex items-center justify-center" role="status">
-    <div className="flex flex-col items-center gap-3 text-fg-muted text-sm">
-      <div className="w-5 h-5 border-2 border-line-strong border-t-fg rounded-full animate-spin" aria-hidden="true"></div>
-      <span>{label}</span>
-    </div>
-  </div>
-);
+import { WorkspaceSkeleton } from './components/ui/Skeleton';
 
 const MobileSidebar: React.FC = () => {
   const { mobileNavOpen, setMobileNavOpen } = useApp();
@@ -67,7 +59,8 @@ const ConnectionNotice: React.FC = () => {
 
 // While the HandleMyDesk owner works inside this office as support
 const SupportVisitBanner: React.FC = () => {
-  const office = useOffice(tokenClaims().sup !== undefined);
+  // Also loads the office's branding (colour, logo) for the whole app
+  const office = useOffice();
   if (!office?.supportVisit) return null;
   return (
     <div role="status" className="fixed bottom-[calc(4rem+env(safe-area-inset-bottom))] lg:bottom-4 left-1/2 -translate-x-1/2 z-[60] flex items-center gap-3 max-w-[calc(100vw-2rem)] pl-4 pr-1.5 py-1.5 rounded-full bg-fg text-canvas text-[13px] shadow-lg">
@@ -131,9 +124,7 @@ export const App: React.FC = () => {
 
   if (authStatus === 'checking' || loading) {
     return (
-      <div className="flex h-full bg-canvas">
-        <Spinner label="Loading your workspace…" />
-      </div>
+      <WorkspaceSkeleton />
     );
   }
 

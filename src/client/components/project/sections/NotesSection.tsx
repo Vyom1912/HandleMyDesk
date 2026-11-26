@@ -13,7 +13,7 @@ const CATEGORIES: ProjectNote['category'][] = ['meeting', 'architecture', 'spec'
 
 export const NotesSection: React.FC = () => {
   const { projectId, notes, setNotes, canManage, reload } = useProject();
-  const { currentUser, confirm, showToast } = useApp();
+  const { currentUser, showToast, deleteWithUndo } = useApp();
   const [selectedId, setSelectedId] = useState<string | null>(() => {
     // Opened from search: show that note
     try {
@@ -67,15 +67,14 @@ export const NotesSection: React.FC = () => {
     }
   };
 
-  const remove = async (note: ProjectNote) => {
-    const ok = await confirm({ title: 'Delete note?', message: `“${note.title}” will be permanently deleted.`, confirmLabel: 'Delete', danger: true });
-    if (!ok) return;
-    try {
-      await api.delete(`/api/projects/${projectId}/notes/${note.id}`);
-      setNotes((list) => list.filter((n) => n.id !== note.id));
-    } catch (err: any) {
-      showToast(err.message, 'error');
-    }
+  const remove = (note: ProjectNote) => {
+    deleteWithUndo({
+      id: note.id,
+      message: `Deleted note “${note.title}”`,
+      hide: () => setNotes((list) => list.filter((n) => n.id !== note.id)),
+      restore: () => setNotes((list) => (list.some((n) => n.id === note.id) ? list : [note, ...list])),
+      commit: () => api.delete(`/api/projects/${projectId}/notes/${note.id}`),
+    });
   };
 
   return (
