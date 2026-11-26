@@ -1284,6 +1284,8 @@ export interface FirstAdmin {
   name: string;
   email: string;
   password: string;
+  // false: the password stays; otherwise they choose their own at first sign-in
+  mustChange?: boolean;
 }
 
 function bootstrapAdminFromEnv(given?: FirstAdmin): { user: User; password: string } {
@@ -1458,7 +1460,7 @@ export class Database {
       this.data = emptySchema();
       this.data.users.push(user);
       this.save();
-      this.setPasswordHash(user.id, bcrypt.hashSync(password, 10), { mustChange: true });
+      this.setPasswordHash(user.id, bcrypt.hashSync(password, 10), { mustChange: this.firstAdmin.mustChange !== false });
       return;
     }
     if (n === 0) {

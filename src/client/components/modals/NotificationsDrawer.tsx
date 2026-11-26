@@ -140,7 +140,7 @@ const Preferences: React.FC<{ onBack: () => void }> = ({ onBack }) => {
 };
 
 export const NotificationsDrawer: React.FC = () => {
-  const { isNotificationsOpen, setIsNotificationsOpen, notifications, notificationCount, markNotificationRead, markAllNotificationsRead, openProject, hasMoreNotifications, loadMoreNotifications } = useApp();
+  const { isNotificationsOpen, setIsNotificationsOpen, notifications, notificationCount, markNotificationRead, markAllNotificationsRead, openProject, navigate, hasMoreNotifications, loadMoreNotifications } = useApp();
   const [loadingMore, setLoadingMore] = useState(false);
   const [filter, setFilter] = useState<'unread' | 'all'>('all');
   const [project, setProject] = useState('all');
@@ -165,6 +165,12 @@ export const NotificationsDrawer: React.FC = () => {
     if (notif.kind === 'support' && !notif.projectId) {
       close();
       openSupport();
+      return;
+    }
+    // "Password help needed": the reset is on the Team page
+    if (notif.kind === 'password') {
+      close();
+      navigate({ view: 'team' });
       return;
     }
     if (notif.projectId) {

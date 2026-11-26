@@ -244,6 +244,7 @@ export const NOTIFICATION_KINDS = [
   { kind: 'deliverables', label: 'Deliverables I own' },
   { kind: 'team', label: 'Being added to a project' },
   { kind: 'support', label: 'Replies from HandleMyDesk support' },
+  { kind: 'password', label: "Colleagues who can't sign in (for admins)" },
 ] as const;
 
 // ==========================================
@@ -260,7 +261,7 @@ export interface OfficeSummary {
   notes: string;
   createdAt: string;
   people: number;
-  admins: Array<{ name: string; email: string }>;
+  admins: Array<{ id: string; name: string; email: string }>;
   activeProjects: number;
   openTasks: number;
   overdueTasks: number;
@@ -274,7 +275,8 @@ export interface OwnerProfile {
   email: string;
 }
 
-export type SupportCategory = 'people' | 'technical' | 'other';
+// 'password' is made by "Forgot password?" for an office administrator
+export type SupportCategory = 'people' | 'technical' | 'other' | 'password';
 
 export interface SupportMessage {
   id: string;

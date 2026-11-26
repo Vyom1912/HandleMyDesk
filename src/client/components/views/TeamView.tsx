@@ -17,11 +17,22 @@ const ROLE_HELP: Record<User['role'], string> = {
   member: 'Works on the projects they are added to',
 };
 
-type PersonForm = { name: string; email: string; title: string; department: string; role: User['role']; phone: string; status: User['status'] };
-const EMPTY: PersonForm = { name: '', email: '', title: '', department: '', role: 'member', phone: '', status: 'active' };
+type PersonForm = {
+  name: string;
+  email: string;
+  title: string;
+  department: string;
+  role: User['role'];
+  phone: string;
+  status: User['status'];
+  // New people only: a password chosen by the admin (empty = random temporary one)
+  password: string;
+  mustChangePassword: boolean;
+};
+const EMPTY: PersonForm = { name: '', email: '', title: '', department: '', role: 'member', phone: '', status: 'active', password: '', mustChangePassword: true };
 
 /** Shows a temporary password once, with a copy button, so the admin can pass it on. */
-const TemporaryPasswordDialog: React.FC<{ value: { name: string; email: string; password: string } | null; onClose: () => void }> = ({ value, onClose }) => {
+const TemporaryPasswordDialog: React.FC<{ value: { name: string; email: string; password: string; mustChange?: boolean } | null; onClose: () => void }> = ({ value, onClose }) => {
   const [copied, setCopied] = useState(false);
   useEffect(() => setCopied(false), [value]);
   if (!value) return null;
@@ -37,7 +48,7 @@ const TemporaryPasswordDialog: React.FC<{ value: { name: string; email: string; 
     <Modal
       open
       onClose={onClose}
-      title="Temporary password"
+      title={value.mustChange === false ? 'Password' : 'Temporary password'}
       size="sm"
       footer={
         <Button onClick={onClose} data-autofocus>
@@ -46,8 +57,8 @@ const TemporaryPasswordDialog: React.FC<{ value: { name: string; email: string; 
       }
     >
       <p className="text-sm text-fg-muted">
-        Give this to <strong className="text-fg">{value.name}</strong> in person or by phone. They sign in with <span className="text-fg">{value.email}</span> and
-        will be asked to choose their own password.
+        Give this to <strong className="text-fg">{value.name}</strong> in person or by phone. They sign in with <span className="text-fg">{value.email}</span>
+        {value.mustChange === false ? ' and can keep this password.' : ' and will be asked to choose their own password.'}
       </p>
       <div className="mt-4 flex items-center gap-2">
         <code className="flex-1 h-10 px-3 flex items-center rounded-md bg-subtle border border-line font-mono text-base text-fg tracking-wide select-all">{value.password}</code>
@@ -71,7 +82,7 @@ export const TeamView: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [menuFor, setMenuFor] = useState<string | null>(null);
-  const [tempPassword, setTempPassword] = useState<{ name: string; email: string; password: string } | null>(null);
+  const [tempPassword, setTempPassword] = useState<{ name: string; email: string; password: string; mustChange?: boolean } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   const isAdmin = currentUser?.role === 'admin';
@@ -107,7 +118,7 @@ export const TeamView: React.FC = () => {
     setError(null);
     setForm(
       person
-        ? { name: person.name, email: person.email, title: person.title, department: person.department, role: person.role, phone: person.phone, status: person.status }
+        ? { ...EMPTY, name: person.name, email: person.email, title: person.title, department: person.department, role: person.role, phone: person.phone, status: person.status }
         : EMPTY
     );
     setEditorOpen(true);
@@ -121,13 +132,17 @@ export const TeamView: React.FC = () => {
     setSaving(true);
     try {
       if (editing) {
-        await api.put<User>(`/api/employees/${editing.id}`, form);
+        const { password: _p, mustChangePassword: _m, ...details } = form;
+        await api.put<User>(`/api/employees/${editing.id}`, details);
         showToast('Saved', 'success');
         // Editing yourself (e.g. your role) changes what you can see
         if (editing.id === currentUser?.id) retryLoad();
       } else {
-        const res = await api.post<{ user: User; temporaryPassword: string }>('/api/employees', form);
-        setTempPassword({ name: res.user.name, email: res.user.email, password: res.temporaryPassword });
+        const res = await api.post<{ user: User; temporaryPassword: string; mustChangePassword: boolean }>('/api/employees', {
+          ...form,
+          password: form.password || undefined,
+        });
+        setTempPassword({ name: res.user.name, email: res.user.email, password: res.temporaryPassword, mustChange: res.mustChangePassword });
       }
       await refreshEmployees();
       setEditorOpen(false);
@@ -293,7 +308,7 @@ export const TeamView: React.FC = () => {
         open={editorOpen}
         onClose={() => setEditorOpen(false)}
         title={editing ? `Edit ${editing.name}` : 'Add person'}
-        description={editing ? undefined : "They'll get a temporary password to sign in with, and choose their own at first sign-in."}
+        description={editing ? undefined : 'Choose their password, or leave it empty for a random temporary one.'}
         size="lg"
         footer={
           <>
@@ -329,6 +344,17 @@ export const TeamView: React.FC = () => {
             <Field label="Phone">
               <input type="tel" className={inputClass} value={form.phone} onChange={(e) => set({ phone: e.target.value })} />
             </Field>
+            {!editing && (
+              <Field label="Password" hint="Leave empty to make a random temporary password. Otherwise at least 8 characters.">
+                <input type="text" autoComplete="new-password" spellCheck={false} minLength={8} className={`${inputClass} font-mono`} value={form.password} onChange={(e) => set({ password: e.target.value })} />
+                {form.password && (
+                  <label className="flex items-center gap-2 mt-2 text-sm text-fg-muted cursor-pointer">
+                    <input type="checkbox" className="accent-accent" checked={form.mustChangePassword} onChange={(e) => set({ mustChangePassword: e.target.checked })} />
+                    Ask them to choose their own at first sign-in
+                  </label>
+                )}
+              </Field>
+            )}
             {editing && (
               <Field label="Status">
                 <select className={selectClass} value={form.status} onChange={(e) => set({ status: e.target.value as User['status'] })}>

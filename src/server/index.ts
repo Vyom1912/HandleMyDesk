@@ -478,6 +478,10 @@ app.post(
     const email = text(body.email, 'Email', 200, true)!.toLowerCase();
     if (!EMAIL_PATTERN.test(email)) throw new HttpError(400, 'Enter a valid email');
     if (database.users.some((u) => u.email.toLowerCase() === email)) throw new HttpError(400, 'Someone already uses that email');
+    // The admin may choose the password; otherwise a temporary one is made
+    const chosen = typeof body.password === 'string' ? body.password : '';
+    if (chosen && chosen.length < 8) throw new HttpError(400, 'Password must be at least 8 characters');
+    if (chosen.length > 200) throw new HttpError(400, 'Password is too long');
 
     const user: User = {
       id: newId('emp'),
@@ -492,13 +496,15 @@ app.post(
       initials: initialsOf(name),
       active: true,
     };
-    const password = temporaryPassword();
+    const password = chosen || temporaryPassword();
+    // A chosen password may be kept if the admin says so; a generated one is always replaced
+    const mustChange = !chosen || body.mustChangePassword !== false;
     database.users.push(user);
     db.save();
-    db.setPasswordHash(user.id, await bcrypt.hash(password, 10), { mustChange: true });
+    db.setPasswordHash(user.id, await bcrypt.hash(password, 10), { mustChange });
 
     // The temporary password is shown once to the admin and never stored in plain text
-    res.status(201).json({ user, temporaryPassword: password });
+    res.status(201).json({ user, temporaryPassword: password, mustChangePassword: mustChange });
   })
 );
 

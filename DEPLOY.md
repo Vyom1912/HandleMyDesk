@@ -179,6 +179,18 @@ see each other. You, the HandleMyDesk owner, see all of them.
 
 Company sign-in (SSO) works for the first office only in this version.
 
+### Passwords
+
+- **Adding an office or a person:** type a password, or leave it empty for a random temporary one.
+  With a typed password you can tick whether they must choose their own at first sign-in.
+- **"Forgot password?"** (sign-in screen) never sends email. It asks whoever can reset it:
+  - staff → their office's administrators get a notification → **Team → person → Reset password**;
+  - an office administrator (or an office with no other admin) → you get it in **Problems** →
+    **Reset their password**. You can also reset any office admin from the office card (**Admin password**).
+- **You (the owner) forgot your password:** on Render, change `OWNER_PASSWORD` and save. After the
+  restart, sign in with the new one. (A password you changed in the console stays until you change
+  `OWNER_PASSWORD` again.)
+
 ## Phone notifications
 
 1. On your computer, run `npx web-push generate-vapid-keys`. It prints a Public Key and a Private Key.

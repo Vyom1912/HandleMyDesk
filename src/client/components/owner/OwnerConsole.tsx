@@ -3,7 +3,7 @@ import { Building2, LifeBuoy, ScrollText, LogOut, Plus, LogIn, Pause, Play, Penc
 import { OfficeSummary, OwnerProfile, OwnerLogEntry, SupportTicket, SupportCategory } from '../../../types';
 import { api, setStoredToken, enterOfficeAsSupport, UNAUTHORIZED_EVENT } from '../../services/api';
 import { Modal } from '../ui/Modal';
-import { Field, inputClass, textareaClass, Button, Segmented, EmptyState } from '../ui/Field';
+import { Field, inputClass, textareaClass, selectClass, Button, Segmented, EmptyState } from '../ui/Field';
 import { Tag, timeAgo, formatDateTime } from '../ui/Badges';
 
 /*
@@ -11,8 +11,130 @@ import { Tag, timeAgo, formatDateTime } from '../ui/Badges';
  * pause them, go inside one as support to fix or maintain things, and answer "Report a problem".
  */
 
-export const CATEGORY_LABEL: Record<SupportCategory, string> = { people: 'Between people', technical: 'Technical', other: 'Other' };
-export const CATEGORY_TONE: Record<SupportCategory, 'orange' | 'blue' | 'gray'> = { people: 'orange', technical: 'blue', other: 'gray' };
+export const CATEGORY_LABEL: Record<SupportCategory, string> = { people: 'Between people', technical: 'Technical', other: 'Other', password: 'Password help' };
+export const CATEGORY_TONE: Record<SupportCategory, 'orange' | 'blue' | 'gray' | 'amber'> = { people: 'orange', technical: 'blue', other: 'gray', password: 'amber' };
+
+/** Password field + "they must change it" switch, shared by Add office and Reset password. */
+const PasswordChoice: React.FC<{
+  password: string;
+  mustChange: boolean;
+  onPassword: (v: string) => void;
+  onMustChange: (v: boolean) => void;
+  label?: string;
+}> = ({ password, mustChange, onPassword, onMustChange, label = 'Password' }) => (
+  <div className="space-y-2">
+    <Field label={label} hint="Leave empty to make a random temporary password. Otherwise at least 8 characters.">
+      <input type="text" autoComplete="new-password" spellCheck={false} className={`${inputClass} font-mono`} value={password} onChange={(e) => onPassword(e.target.value)} minLength={8} />
+    </Field>
+    {password && (
+      <label className="flex items-center gap-2 text-sm text-fg-muted cursor-pointer">
+        <input type="checkbox" className="accent-[var(--accent)]" checked={mustChange} onChange={(e) => onMustChange(e.target.checked)} />
+        Ask them to choose their own password at first sign-in
+      </label>
+    )}
+  </div>
+);
+
+/** Sign-in details shown once after creating or resetting, with a copy button. */
+const SignInDetails: React.FC<{ email: string; password: string; mustChange: boolean }> = ({ email, password, mustChange }) => {
+  const details = `HandleMyDesk: ${window.location.origin}\nEmail: ${email}\nPassword: ${password}`;
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-fg-muted">
+        Send these details to them by phone or message.{' '}
+        {mustChange ? 'They will choose their own password the first time they sign in.' : 'They can keep this password.'} It is shown only once.
+      </p>
+      <pre className="p-3 rounded-md bg-subtle border border-line text-[13px] whitespace-pre-wrap break-all font-mono">{details}</pre>
+      <Button variant="secondary" size="sm" onClick={() => navigator.clipboard?.writeText(details)}>
+        <Copy size={14} /> Copy
+      </Button>
+    </div>
+  );
+};
+
+type ResetTarget = { officeId: string; officeName: string; people: Array<{ id: string; name: string; email: string }> };
+
+/** Owner resets the password of someone in an office (usually its administrator). */
+const ResetPasswordModal: React.FC<{ target: ResetTarget | null; onClose: () => void; onDone: () => void }> = ({ target, onClose, onDone }) => {
+  const [personId, setPersonId] = useState('');
+  const [password, setPassword] = useState('');
+  const [mustChange, setMustChange] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [result, setResult] = useState<{ email: string; temporaryPassword: string; mustChangePassword: boolean } | null>(null);
+
+  useEffect(() => {
+    setPersonId(target?.people[0]?.id ?? '');
+    setPassword('');
+    setMustChange(true);
+    setError(null);
+    setResult(null);
+  }, [target]);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!target || !personId) return;
+    setError(null);
+    setSaving(true);
+    try {
+      setResult(await api.post(`/api/owner/offices/${target.officeId}/people/${personId}/reset-password`, { password: password || undefined, mustChangePassword: mustChange }));
+      onDone();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal
+      open={!!target}
+      onClose={onClose}
+      title={result ? 'Password reset' : `Reset a password · ${target?.officeName ?? ''}`}
+      description={result ? undefined : 'They are signed out everywhere and sign in again with the new password.'}
+      footer={
+        result ? (
+          <Button onClick={onClose}>Done</Button>
+        ) : (
+          <>
+            <Button variant="secondary" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type="submit" form="owner-reset-form" disabled={saving || !personId}>
+              {saving ? 'Resetting…' : 'Reset password'}
+            </Button>
+          </>
+        )
+      }
+    >
+      {result ? (
+        <SignInDetails email={result.email} password={result.temporaryPassword} mustChange={result.mustChangePassword} />
+      ) : (
+        <form id="owner-reset-form" onSubmit={submit} className="space-y-3">
+          {error && (
+            <p role="alert" className="text-sm text-tone-red-fg">
+              {error}
+            </p>
+          )}
+          {target && target.people.length === 0 ? (
+            <p className="text-sm text-fg-muted">This office has no administrator. Open the office and add one from Team.</p>
+          ) : (
+            <Field label="Person">
+              <select className={selectClass} value={personId} onChange={(e) => setPersonId(e.target.value)}>
+                {target?.people.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} ({p.email})
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
+          <PasswordChoice password={password} mustChange={mustChange} onPassword={setPassword} onMustChange={setMustChange} label="New password" />
+        </form>
+      )}
+    </Modal>
+  );
+};
 
 type Tab = 'offices' | 'problems' | 'log';
 
@@ -161,6 +283,7 @@ const OfficesTab: React.FC<{
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<OfficeSummary | null>(null);
   const [pausing, setPausing] = useState<OfficeSummary | null>(null);
+  const [resetting, setResetting] = useState<ResetTarget | null>(null);
 
   if (!offices) return <p className="text-sm text-fg-muted" role="status">Loading offices…</p>;
 
@@ -238,6 +361,9 @@ const OfficesTab: React.FC<{
                   <Play size={14} /> Resume
                 </Button>
               )}
+              <Button size="sm" variant="secondary" onClick={() => setResetting({ officeId: o.id, officeName: o.name, people: o.admins })}>
+                <KeyRound size={14} /> Admin password
+              </Button>
               <span className="ml-auto text-xs text-fg-faint">{o.lastActivity ? `Active ${timeAgo(o.lastActivity)}` : 'No activity yet'}</span>
             </div>
           </li>
@@ -245,6 +371,7 @@ const OfficesTab: React.FC<{
       </ul>
 
       <AddOfficeModal open={adding} onClose={() => setAdding(false)} onAdded={onChanged} notify={notify} />
+      <ResetPasswordModal target={resetting} onClose={() => setResetting(null)} onDone={onChanged} />
       <EditOfficeModal office={editing} onClose={() => setEditing(null)} onSaved={onChanged} notify={notify} />
       <Modal
         open={!!pausing}
@@ -275,14 +402,16 @@ const OfficesTab: React.FC<{
   );
 };
 
+const EMPTY_OFFICE = { name: '', adminName: '', adminEmail: '', adminPassword: '', mustChangePassword: true, notes: '' };
+
 const AddOfficeModal: React.FC<{ open: boolean; onClose: () => void; onAdded: () => void; notify: (m: string, e?: boolean) => void }> = ({ open, onClose, onAdded }) => {
-  const [form, setForm] = useState({ name: '', adminName: '', adminEmail: '', notes: '' });
+  const [form, setForm] = useState(EMPTY_OFFICE);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [created, setCreated] = useState<{ name: string; adminEmail: string; temporaryPassword: string } | null>(null);
+  const [created, setCreated] = useState<{ name: string; adminEmail: string; temporaryPassword: string; mustChangePassword: boolean } | null>(null);
 
   const close = () => {
-    setForm({ name: '', adminName: '', adminEmail: '', notes: '' });
+    setForm(EMPTY_OFFICE);
     setError(null);
     setCreated(null);
     onClose();
@@ -293,8 +422,11 @@ const AddOfficeModal: React.FC<{ open: boolean; onClose: () => void; onAdded: ()
     setError(null);
     setSaving(true);
     try {
-      const r = await api.post<{ office: OfficeSummary; adminEmail: string; temporaryPassword: string }>('/api/owner/offices', form);
-      setCreated({ name: r.office.name, adminEmail: r.adminEmail, temporaryPassword: r.temporaryPassword });
+      const r = await api.post<{ office: OfficeSummary; adminEmail: string; temporaryPassword: string; mustChangePassword: boolean }>('/api/owner/offices', {
+        ...form,
+        adminPassword: form.adminPassword || undefined,
+      });
+      setCreated({ name: r.office.name, adminEmail: r.adminEmail, temporaryPassword: r.temporaryPassword, mustChangePassword: r.mustChangePassword });
       onAdded();
     } catch (err: any) {
       setError(err.message);
@@ -302,8 +434,6 @@ const AddOfficeModal: React.FC<{ open: boolean; onClose: () => void; onAdded: ()
       setSaving(false);
     }
   };
-
-  const details = created ? `HandleMyDesk: ${window.location.origin}\nEmail: ${created.adminEmail}\nTemporary password: ${created.temporaryPassword}` : '';
 
   return (
     <Modal
@@ -327,13 +457,7 @@ const AddOfficeModal: React.FC<{ open: boolean; onClose: () => void; onAdded: ()
       }
     >
       {created ? (
-        <div className="space-y-3">
-          <p className="text-sm text-fg-muted">Send these sign-in details to the office administrator. They choose their own password the first time they sign in. The temporary password is shown only once.</p>
-          <pre className="p-3 rounded-md bg-subtle border border-line text-[13px] whitespace-pre-wrap break-all font-mono">{details}</pre>
-          <Button variant="secondary" size="sm" onClick={() => navigator.clipboard?.writeText(details)}>
-            <Copy size={14} /> Copy
-          </Button>
-        </div>
+        <SignInDetails email={created.adminEmail} password={created.temporaryPassword} mustChange={created.mustChangePassword} />
       ) : (
         <form id="add-office-form" onSubmit={submit} className="space-y-3">
           {error && (
@@ -352,6 +476,13 @@ const AddOfficeModal: React.FC<{ open: boolean; onClose: () => void; onAdded: ()
               <input required type="email" className={inputClass} value={form.adminEmail} onChange={(e) => setForm({ ...form, adminEmail: e.target.value })} />
             </Field>
           </div>
+          <PasswordChoice
+            label="Administrator's password"
+            password={form.adminPassword}
+            mustChange={form.mustChangePassword}
+            onPassword={(adminPassword) => setForm({ ...form, adminPassword })}
+            onMustChange={(mustChangePassword) => setForm({ ...form, mustChangePassword })}
+          />
           <Field label="Notes (only you see these)">
             <textarea rows={2} className={textareaClass} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="Plan, contact phone, anything to remember" />
           </Field>
@@ -437,6 +568,7 @@ const ProblemsTab: React.FC<{
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [reply, setReply] = useState('');
   const [sending, setSending] = useState(false);
+  const [resetting, setResetting] = useState<ResetTarget | null>(null);
 
   const list = useMemo(() => (tickets ?? []).filter((t) => filter === 'all' || t.status === filter), [tickets, filter]);
   const selected = tickets?.find((t) => t.id === selectedId) ?? null;
@@ -533,6 +665,20 @@ const ProblemsTab: React.FC<{
                 <Tag tone={CATEGORY_TONE[selected.category]}>{CATEGORY_LABEL[selected.category]}</Tag> {selected.officeName} · {selected.userName} ({selected.userEmail})
               </p>
               <div className="flex flex-wrap gap-2 mt-3">
+                {selected.category === 'password' && (
+                  <Button
+                    size="sm"
+                    onClick={() =>
+                      setResetting({
+                        officeId: selected.officeId,
+                        officeName: selected.officeName ?? '',
+                        people: [{ id: selected.userId, name: selected.userName, email: selected.userEmail }],
+                      })
+                    }
+                  >
+                    <KeyRound size={14} /> Reset their password
+                  </Button>
+                )}
                 {officeOf(selected) && (
                   <Button size="sm" variant="secondary" onClick={() => onEnter(officeOf(selected)!)}>
                     <LogIn size={14} /> Open their office
@@ -570,6 +716,7 @@ const ProblemsTab: React.FC<{
           </div>
         )}
       </section>
+      <ResetPasswordModal target={resetting} onClose={() => setResetting(null)} onDone={onChanged} />
     </div>
   );
 };

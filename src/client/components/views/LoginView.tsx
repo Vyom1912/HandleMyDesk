@@ -52,6 +52,62 @@ export const LoginView: React.FC = () => {
     signIn();
   };
 
+  // "Forgot password?": asks whoever can reset it (office admin, or HandleMyDesk for admins)
+  const [forgot, setForgot] = useState<'closed' | 'open' | 'sent'>('closed');
+  const askForReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setSubmitting(true);
+    try {
+      await api.post('/api/auth/forgot', { email: email.trim() });
+      setForgot('sent');
+    } catch (err: any) {
+      setError(err.message || 'Could not send the request');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (forgot !== 'closed') {
+    return (
+      <main className="min-h-full w-full flex items-center justify-center bg-canvas px-4 py-12">
+        <div className="w-full max-w-[340px]">
+          <h1 className="text-2xl font-semibold tracking-tight text-fg mb-1">Forgot your password?</h1>
+          {forgot === 'sent' ? (
+            <div className="space-y-4">
+              <p className="text-sm text-fg-muted" role="status">
+                Done. If <strong className="text-fg">{email.trim()}</strong> has an account, the people who can reset it have been told: your office administrator, or
+                HandleMyDesk if you are the administrator. They will give you a new password, usually by phone or message.
+              </p>
+              <Button className="w-full h-9" onClick={() => setForgot('closed')}>
+                Back to sign in
+              </Button>
+            </div>
+          ) : (
+            <form onSubmit={askForReset} className="space-y-4" noValidate>
+              <p className="text-sm text-fg-muted">Enter your work email. We'll ask the person who can reset your password to do it.</p>
+              {error && (
+                <div role="alert" className="flex items-start gap-2 p-2.5 rounded-md bg-tone-red-bg text-sm text-tone-red-fg">
+                  <AlertCircle size={15} className="shrink-0 mt-0.5" />
+                  <span>{error}</span>
+                </div>
+              )}
+              <Field label="Email">
+                <input type="email" autoComplete="username" required autoFocus value={email} onChange={(e) => setEmail(e.target.value)} className={inputClass} />
+              </Field>
+              <Button type="submit" className="w-full h-9" disabled={submitting || !email.trim()}>
+                {submitting ? 'Sending…' : 'Ask for a password reset'}
+              </Button>
+              <button type="button" onClick={() => setForgot('closed')} className="w-full text-sm text-fg-muted hover:text-fg">
+                Back to sign in
+              </button>
+            </form>
+          )}
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-full w-full flex items-center justify-center bg-canvas px-4 py-12">
       <div className="w-full max-w-[340px]">
@@ -92,6 +148,18 @@ export const LoginView: React.FC = () => {
           <Field label="Password">
             <input type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} className={inputClass} />
           </Field>
+          <div className="-mt-2 text-right">
+            <button
+              type="button"
+              onClick={() => {
+                setError(null);
+                setForgot('open');
+              }}
+              className="text-[13px] text-fg-muted hover:text-fg hover:underline underline-offset-2"
+            >
+              Forgot password?
+            </button>
+          </div>
           {offices ? (
             <div className="space-y-2" role="group" aria-label="Choose your office">
               <p className="text-sm text-fg-muted">You have accounts in more than one office. Which one do you want to open?</p>

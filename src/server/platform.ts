@@ -5,9 +5,10 @@ import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import express, { Request, Response, NextFunction, RequestHandler } from 'express';
-import { Database, Tenant, MAIN_TENANT, MAIN_TENANT_ID, runInTenant, currentTenant, db, SEED_PASSWORD, initialsOf } from './db';
+import { Database, Tenant, MAIN_TENANT, MAIN_TENANT_ID, runInTenant, currentTenant, db, SEED_PASSWORD, initialsOf, FirstAdmin } from './db';
 import { DATA_DIR, IS_TEST, IS_PROD } from './paths';
 import { JWT_SECRET, generateToken, authMiddleware, AuthenticatedRequest } from './auth';
+import { closeStreamsFor } from './events';
 import {
   User,
   NotificationItem,
@@ -44,6 +45,7 @@ interface OwnerRecord extends OwnerProfile {
   passwordHash: string;
   sessionVersion: number;
   createdAt: string;
+  envFingerprint?: string;
 }
 
 interface PlatformData {
@@ -91,18 +93,33 @@ if (!data.offices.some((o) => o.id === MAIN_TENANT_ID)) {
   data.offices.unshift({ id: MAIN_TENANT_ID, name: process.env.MAIN_OFFICE_NAME?.trim() || 'Main office', status: 'active', notes: '', createdAt: now() });
 }
 
-// First owner account: OWNER_* settings, or a development default
+// Which OWNER_PASSWORD was last applied (a keyed hash, never the password itself)
+const envFingerprint = (password: string) => crypto.createHmac('sha256', 'handlemydesk-owner-password').update(password).digest('hex');
+
+/*
+ * Owner account from the OWNER_* settings (or a development default):
+ * - created on first start;
+ * - OWNER_PASSWORD changed on the server = the owner's password is reset to it ("forgot password"
+ *   for the owner). A password changed in the console stays until OWNER_PASSWORD changes again.
+ */
 function bootstrapOwner() {
-  if (data.owners.length > 0) return;
   const name = process.env.OWNER_NAME?.trim() || (IS_PROD ? '' : 'HandleMyDesk Owner');
   const email = process.env.OWNER_EMAIL?.trim().toLowerCase() || (IS_PROD ? '' : 'owner@handlemydesk.internal');
   const password = process.env.OWNER_PASSWORD || (IS_PROD ? '' : SEED_PASSWORD);
   if (!name || !email || password.length < 8) {
-    console.warn('Owner console is off: set OWNER_NAME, OWNER_EMAIL and OWNER_PASSWORD (8+ characters). See DEPLOY.md.');
+    if (data.owners.length === 0) console.warn('Owner console is off: set OWNER_NAME, OWNER_EMAIL and OWNER_PASSWORD (8+ characters). See DEPLOY.md.');
     return;
   }
-  data.owners.push({ id: newId('own'), name, email, passwordHash: bcrypt.hashSync(password, 10), sessionVersion: 0, createdAt: now() });
-  if (!IS_TEST) console.log(`Created the HandleMyDesk owner account: ${email}`);
+  const existing = data.owners.find((o) => o.email === email);
+  if (!existing) {
+    data.owners.push({ id: newId('own'), name, email, passwordHash: bcrypt.hashSync(password, 10), sessionVersion: 0, createdAt: now(), envFingerprint: envFingerprint(password) });
+    if (!IS_TEST) console.log(`Created the HandleMyDesk owner account: ${email}`);
+  } else if (existing.envFingerprint !== envFingerprint(password)) {
+    existing.passwordHash = bcrypt.hashSync(password, 10);
+    existing.envFingerprint = envFingerprint(password);
+    existing.sessionVersion++;
+    console.log(`Owner password for ${email} reset from OWNER_PASSWORD`);
+  }
 }
 bootstrapOwner();
 savePlatform();
@@ -113,7 +130,7 @@ savePlatform();
 
 const tenants = new Map<string, Tenant>([[MAIN_TENANT_ID, MAIN_TENANT]]);
 
-function openTenant(office: OfficeRecord, firstAdmin?: { name: string; email: string; password: string }): Tenant {
+function openTenant(office: OfficeRecord, firstAdmin?: FirstAdmin): Tenant {
   const existing = tenants.get(office.id);
   if (existing) return existing;
   const dir = path.join(OFFICES_DIR, office.id);
@@ -312,7 +329,7 @@ function summarize(office: OfficeRecord): OfficeSummary {
     notes: office.notes,
     createdAt: office.createdAt,
     people: people.length,
-    admins: people.filter((u) => u.role === 'admin').map((u) => ({ name: u.name, email: u.email })),
+    admins: people.filter((u) => u.role === 'admin').map((u) => ({ id: u.id, name: u.name, email: u.email })),
     activeProjects: d.projects.filter((p) => p.status === 'active').length,
     openTasks: openTasks.length,
     overdueTasks: openTasks.filter((t) => t.dueDate && t.dueDate < today).length,
@@ -358,11 +375,95 @@ export type Notifier = (
 // Tell an office's admins (once an hour at most) that support is working in their office
 const lastVisitNotice = new Map<string, number>();
 
+// Simple in-memory limiter for public requests: at most `max` per `windowMs` for each key
+const hits = new Map<string, number[]>();
+function rateLimited(key: string, max: number, windowMs: number): boolean {
+  if (IS_TEST && key.startsWith('ip:')) return false;
+  const nowMs = Date.now();
+  const recent = (hits.get(key) ?? []).filter((t) => nowMs - t < windowMs);
+  const limited = recent.length >= max;
+  if (!limited) recent.push(nowMs);
+  hits.set(key, recent);
+  return limited;
+}
+
 // ==========================================
 // ROUTES
 // ==========================================
 
 export function registerPlatformRoutes(app: express.Express, notify: Notifier) {
+  /*
+   * "Forgot password?" on the sign-in screen. There is no email yet, so the request goes to whoever
+   * can reset it: the office's administrators (Team → Reset password), and for an administrator,
+   * HandleMyDesk (owner console → Problems). The reply is always the same, so it never reveals
+   * whether an email has an account.
+   */
+  app.post(
+    '/api/auth/forgot',
+    handle(async (req, res) => {
+      const email = text(req.body?.email, 'Email', 200, true).toLowerCase();
+      const answer = { ok: true };
+      if (rateLimited(`email:${email}`, 1, 15 * 60 * 1000) || rateLimited(`ip:${req.ip}`, 20, 3600 * 1000)) {
+        res.json(answer);
+        return;
+      }
+
+      for (const office of data.offices) {
+        if (office.status === 'suspended') continue;
+        const tenant = openTenant(office);
+        const person = tenant.db.getData().users.find((u) => u.id !== SUPPORT_USER_ID && u.active !== false && emailOf(u) === email);
+        if (!person) continue;
+
+        runInTenant(tenant, () => {
+          const otherAdmins = db
+            .getData()
+            .users.filter((u) => u.role === 'admin' && u.active !== false && u.id !== person.id && u.id !== SUPPORT_USER_ID)
+            .map((u) => u.id);
+          if (otherAdmins.length) {
+            notify(otherAdmins, null, {
+              title: 'Password help needed',
+              message: `${person.name} (${person.email}) can't sign in. Open Team, find them and choose Reset password, then give them the new password.`,
+              type: 'warning',
+              kind: 'password',
+            });
+            db.save();
+          }
+        });
+
+        // Administrators (or offices without another admin) are reset by HandleMyDesk
+        const alreadyAsked = data.tickets.some((t) => t.officeId === office.id && t.userId === person.id && t.category === 'password' && t.status === 'open');
+        const hasOtherAdmin = tenant.db.getData().users.some((u) => u.role === 'admin' && u.active !== false && u.id !== person.id && u.id !== SUPPORT_USER_ID);
+        if ((person.role === 'admin' || !hasOtherAdmin) && !alreadyAsked) {
+          data.tickets.unshift({
+            id: newId('tkt'),
+            officeId: office.id,
+            userId: person.id,
+            userName: person.name,
+            userEmail: person.email,
+            category: 'password',
+            subject: `Password reset for ${person.name}`,
+            status: 'open',
+            messages: [
+              {
+                id: newId('msg'),
+                from: 'customer',
+                name: person.name,
+                text: `${person.name} (${person.role === 'admin' ? 'administrator' : person.role === 'pm' ? 'project manager' : 'member'}) used "Forgot password?" and can't sign in. Reset their password, then give them the new one by phone or message.`,
+                at: now(),
+              },
+            ],
+            createdAt: now(),
+            updatedAt: now(),
+            unreadByOwner: true,
+            unreadByCustomer: false,
+          });
+          savePlatform();
+        }
+      }
+      res.json(answer);
+    })
+  );
+
   // ----- Inside an office: which office am I in? -----
   app.get('/api/office', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
     res.json({ id: currentTenant().id, name: officeName(), supportVisit: req.user!.id === SUPPORT_USER_ID });
@@ -470,14 +571,18 @@ export function registerPlatformRoutes(app: express.Express, notify: Notifier) {
       const adminEmail = text(body.adminEmail, 'Administrator email', 200, true).toLowerCase();
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(adminEmail)) throw new PlatformError(400, 'Enter a valid administrator email');
       if (data.offices.some((o) => o.name.toLowerCase() === name.toLowerCase())) throw new PlatformError(400, 'An office with that name already exists');
-      const password = temporaryPassword();
+      // The owner may choose the administrator's password; otherwise a temporary one is made
+      const chosen = typeof body.adminPassword === 'string' ? body.adminPassword : '';
+      if (chosen && (chosen.length < 8 || chosen.length > 200)) throw new PlatformError(400, 'Password must be at least 8 characters');
+      const password = chosen || temporaryPassword();
+      const mustChange = !chosen || body.mustChangePassword !== false;
 
       const office: OfficeRecord = { id: newId('off'), name, status: 'active', notes: text(body.notes, 'Notes', 2000), createdAt: now() };
-      openTenant(office, { name: adminName, email: adminEmail, password });
+      openTenant(office, { name: adminName, email: adminEmail, password, mustChange });
       data.offices.push(office);
       logAction(req.owner!, `added the office "${name}" with administrator ${adminEmail}`, office.id);
       savePlatform();
-      res.status(201).json({ office: summarize(office), adminEmail, temporaryPassword: password });
+      res.status(201).json({ office: summarize(office), adminEmail, temporaryPassword: password, mustChangePassword: mustChange });
     })
   );
 
@@ -534,6 +639,43 @@ export function registerPlatformRoutes(app: express.Express, notify: Notifier) {
       logAction(o, 'went inside the office', office.id);
       savePlatform();
       res.json({ token, officeName: office.name });
+    })
+  );
+
+  // Reset anyone's password inside an office (normally its administrator, who has nobody above them)
+  owner.post(
+    '/offices/:id/people/:userId/reset-password',
+    handle<OwnerRequest>(async (req, res) => {
+      const office = findOffice(req);
+      const body = req.body ?? {};
+      const chosen = typeof body.password === 'string' ? body.password : '';
+      if (chosen && (chosen.length < 8 || chosen.length > 200)) throw new PlatformError(400, 'Password must be at least 8 characters');
+      const password = chosen || temporaryPassword();
+      const mustChange = !chosen || body.mustChangePassword !== false;
+
+      const user = await runInTenant(openTenant(office), async () => {
+        const person = db.getData().users.find((u) => u.id === String(req.params.userId) && u.id !== SUPPORT_USER_ID);
+        if (!person) throw new PlatformError(404, 'Person not found');
+        db.setPasswordHash(person.id, await bcrypt.hash(password, 10), { mustChange });
+        // Signs them out everywhere, in case someone else had their password
+        db.bumpSessionVersion(person.id);
+        closeStreamsFor(person.id);
+        return person;
+      });
+
+      // Their "Forgot password?" requests are now done
+      for (const t of data.tickets) {
+        if (t.officeId === office.id && t.userId === user.id && t.category === 'password' && t.status === 'open') {
+          t.status = 'resolved';
+          t.unreadByOwner = false;
+          t.unreadByCustomer = true;
+          t.updatedAt = now();
+          t.messages.push({ id: newId('msg'), from: 'owner', name: `${req.owner!.name} (HandleMyDesk)`, text: 'Your password was reset.', at: now() });
+        }
+      }
+      logAction(req.owner!, `reset the password of ${user.name} (${user.email})`, office.id);
+      savePlatform();
+      res.json({ name: user.name, email: user.email, temporaryPassword: password, mustChangePassword: mustChange });
     })
   );
 
@@ -609,6 +751,7 @@ export function registerPlatformRoutes(app: express.Express, notify: Notifier) {
 
 /** Tests only: start over with just the main office and the development owner. */
 export function resetPlatformForTests() {
+  hits.clear();
   data.offices.splice(1);
   data.tickets.length = 0;
   data.log.length = 0;
