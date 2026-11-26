@@ -4,6 +4,7 @@ import { useApp } from '../../context/AppContext';
 import { Modal } from '../ui/Modal';
 import { Field, inputClass, Button, Segmented } from '../ui/Field';
 import { Avatar, label } from '../ui/Badges';
+import { PasswordInput, guessableWords } from '../ui/PasswordInput';
 
 /** Your photo, name, title, phone and status. Email and role are set by an administrator. */
 const ProfileSection: React.FC = () => {
@@ -186,15 +187,9 @@ export const AccountModal: React.FC = () => {
             {error}
           </p>
         )}
-        <Field label="Current password">
-          <input type="password" autoComplete="current-password" className={inputClass} value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} required />
-        </Field>
-        <Field label="New password" hint="At least 8 characters">
-          <input type="password" autoComplete="new-password" className={inputClass} value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required />
-        </Field>
-        <Field label="Confirm new password">
-          <input type="password" autoComplete="new-password" className={inputClass} value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required />
-        </Field>
+        <PasswordInput label="Current password" autoComplete="current-password" required value={currentPassword} onChange={setCurrentPassword} />
+        <PasswordInput label="New password" hint="At least 8 characters" autoComplete="new-password" required meter avoid={guessableWords(currentUser)} value={newPassword} onChange={setNewPassword} />
+        <PasswordInput label="Confirm new password" autoComplete="new-password" required matchWith={newPassword} value={confirmPassword} onChange={setConfirmPassword} />
       </form>
 
       <div className="mt-6 pt-4 border-t border-line flex flex-wrap items-center justify-between gap-3">

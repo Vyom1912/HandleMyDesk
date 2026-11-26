@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { AlertCircle } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { Field, inputClass, Button } from '../ui/Field';
+import { Button } from '../ui/Field';
+import { PasswordInput, guessableWords } from '../ui/PasswordInput';
 
 // Shown after signing in with a temporary password (a new account or an admin reset)
 export const SetPasswordView: React.FC = () => {
@@ -11,6 +12,7 @@ export const SetPasswordView: React.FC = () => {
   const [confirm, setConfirm] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const avoid = guessableWords(currentUser);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,15 +48,9 @@ export const SetPasswordView: React.FC = () => {
               <span>{error}</span>
             </div>
           )}
-          <Field label="Temporary password">
-            <input type="password" autoComplete="current-password" autoFocus required value={current} onChange={(e) => setCurrent(e.target.value)} className={inputClass} />
-          </Field>
-          <Field label="New password" hint="At least 8 characters">
-            <input type="password" autoComplete="new-password" required value={next} onChange={(e) => setNext(e.target.value)} className={inputClass} />
-          </Field>
-          <Field label="Repeat new password">
-            <input type="password" autoComplete="new-password" required value={confirm} onChange={(e) => setConfirm(e.target.value)} className={inputClass} />
-          </Field>
+          <PasswordInput label="Temporary password" autoComplete="current-password" autoFocus required value={current} onChange={setCurrent} />
+          <PasswordInput label="New password" hint="At least 8 characters" autoComplete="new-password" required meter avoid={avoid} value={next} onChange={setNext} />
+          <PasswordInput label="Repeat new password" autoComplete="new-password" required matchWith={next} value={confirm} onChange={setConfirm} />
           <Button type="submit" className="w-full h-9" disabled={saving || !current || !next || !confirm}>
             {saving ? 'Saving…' : 'Save and continue'}
           </Button>

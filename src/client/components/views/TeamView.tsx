@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Plus, MoreHorizontal, Copy, Check } from 'lucide-react';
+import { PasswordInput, guessableWords } from '../ui/PasswordInput';
 import { useApp } from '../../context/AppContext';
 import { api } from '../../services/api';
 import { User } from '../../../types';
@@ -345,15 +346,25 @@ export const TeamView: React.FC = () => {
               <input type="tel" className={inputClass} value={form.phone} onChange={(e) => set({ phone: e.target.value })} />
             </Field>
             {!editing && (
-              <Field label="Password" hint="Leave empty to make a random temporary password. Otherwise at least 8 characters.">
-                <input type="text" autoComplete="new-password" spellCheck={false} minLength={8} className={`${inputClass} font-mono`} value={form.password} onChange={(e) => set({ password: e.target.value })} />
+              <div>
+                <PasswordInput
+                  label="Password"
+                  hint="Leave empty to make a random temporary password. Otherwise at least 8 characters."
+                  autoComplete="new-password"
+                  defaultVisible
+                  suggest
+                  meter
+                  avoid={guessableWords(form)}
+                  value={form.password}
+                  onChange={(v) => set({ password: v })}
+                />
                 {form.password && (
                   <label className="flex items-center gap-2 mt-2 text-sm text-fg-muted cursor-pointer">
                     <input type="checkbox" className="accent-accent" checked={form.mustChangePassword} onChange={(e) => set({ mustChangePassword: e.target.checked })} />
                     Ask them to choose their own at first sign-in
                   </label>
                 )}
-              </Field>
+              </div>
             )}
             {editing && (
               <Field label="Status">

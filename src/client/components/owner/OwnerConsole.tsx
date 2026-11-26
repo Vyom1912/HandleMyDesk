@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Building2, LifeBuoy, ScrollText, LogOut, Plus, LogIn, Pause, Play, Pencil, ArrowLeft, KeyRound, RefreshCw, Copy } from 'lucide-react';
+import { Building2, LifeBuoy, ScrollText, LogOut, Plus, LogIn, Pause, Play, Pencil, ArrowLeft, KeyRound, RefreshCw, Copy, Check } from 'lucide-react';
+import { PasswordInput } from '../ui/PasswordInput';
 import { OfficeSummary, OwnerProfile, OwnerLogEntry, SupportTicket, SupportCategory } from '../../../types';
 import { api, setStoredToken, enterOfficeAsSupport, UNAUTHORIZED_EVENT } from '../../services/api';
 import { Modal } from '../ui/Modal';
@@ -23,9 +24,16 @@ const PasswordChoice: React.FC<{
   label?: string;
 }> = ({ password, mustChange, onPassword, onMustChange, label = 'Password' }) => (
   <div className="space-y-2">
-    <Field label={label} hint="Leave empty to make a random temporary password. Otherwise at least 8 characters.">
-      <input type="text" autoComplete="new-password" spellCheck={false} className={`${inputClass} font-mono`} value={password} onChange={(e) => onPassword(e.target.value)} minLength={8} />
-    </Field>
+    <PasswordInput
+      label={label}
+      hint="Leave empty to make a random temporary password. Otherwise at least 8 characters."
+      autoComplete="new-password"
+      defaultVisible
+      suggest
+      meter
+      value={password}
+      onChange={onPassword}
+    />
     {password && (
       <label className="flex items-center gap-2 text-sm text-fg-muted cursor-pointer">
         <input type="checkbox" className="accent-[var(--accent)]" checked={mustChange} onChange={(e) => onMustChange(e.target.checked)} />
@@ -38,6 +46,16 @@ const PasswordChoice: React.FC<{
 /** Sign-in details shown once after creating or resetting, with a copy button. */
 const SignInDetails: React.FC<{ email: string; password: string; mustChange: boolean }> = ({ email, password, mustChange }) => {
   const details = `HandleMyDesk: ${window.location.origin}\nEmail: ${email}\nPassword: ${password}`;
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(details);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Clipboard blocked: the details are still on screen to copy by hand
+    }
+  };
   return (
     <div className="space-y-3">
       <p className="text-sm text-fg-muted">
@@ -45,8 +63,8 @@ const SignInDetails: React.FC<{ email: string; password: string; mustChange: boo
         {mustChange ? 'They will choose their own password the first time they sign in.' : 'They can keep this password.'} It is shown only once.
       </p>
       <pre className="p-3 rounded-md bg-subtle border border-line text-[13px] whitespace-pre-wrap break-all font-mono">{details}</pre>
-      <Button variant="secondary" size="sm" onClick={() => navigator.clipboard?.writeText(details)}>
-        <Copy size={14} /> Copy
+      <Button variant="secondary" size="sm" onClick={copy}>
+        {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? 'Copied' : 'Copy'}
       </Button>
     </div>
   );
@@ -802,12 +820,8 @@ const PasswordModal: React.FC<{ open: boolean; onClose: () => void; notify: (m: 
             {error}
           </p>
         )}
-        <Field label="Current password" required>
-          <input data-autofocus type="password" required autoComplete="current-password" className={inputClass} value={current} onChange={(e) => setCurrent(e.target.value)} />
-        </Field>
-        <Field label="New password" required hint="At least 8 characters">
-          <input type="password" required minLength={8} autoComplete="new-password" className={inputClass} value={next} onChange={(e) => setNext(e.target.value)} />
-        </Field>
+        <PasswordInput label="Current password" required modalAutofocus autoComplete="current-password" value={current} onChange={setCurrent} />
+        <PasswordInput label="New password" required hint="At least 8 characters" autoComplete="new-password" meter value={next} onChange={setNext} />
       </form>
     </Modal>
   );

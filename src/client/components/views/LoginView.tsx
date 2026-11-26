@@ -3,6 +3,7 @@ import { api } from '../../services/api';
 import { AlertCircle } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Field, inputClass, Button } from '../ui/Field';
+import { PasswordInput } from '../ui/PasswordInput';
 
 // Seeded accounts, shown only in development builds to make testing roles quick
 const DEMO_ACCOUNTS = [
@@ -11,9 +12,28 @@ const DEMO_ACCOUNTS = [
   { email: 'maya.patel@handlemydesk.internal', label: 'Maya Patel', role: 'Member' },
 ];
 
+// Only the email is remembered, never the password, and only when the person ticks the box
+const REMEMBER_KEY = 'hmd.rememberedEmail';
+const readRemembered = () => {
+  try {
+    return localStorage.getItem(REMEMBER_KEY) ?? '';
+  } catch {
+    return '';
+  }
+};
+const writeRemembered = (email: string | null) => {
+  try {
+    if (email) localStorage.setItem(REMEMBER_KEY, email);
+    else localStorage.removeItem(REMEMBER_KEY);
+  } catch {
+    // Private window or blocked storage: nothing to remember
+  }
+};
+
 export const LoginView: React.FC = () => {
   const { login } = useApp();
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(readRemembered);
+  const [remember, setRemember] = useState(() => readRemembered() !== '');
   const [password, setPassword] = useState('');
   // An error sent back from company sign-in arrives in the address: #/sso-error/<message>
   const [error, setError] = useState<string | null>(() => {
@@ -38,6 +58,7 @@ export const LoginView: React.FC = () => {
     setError(null);
     setSubmitting(true);
     try {
+      writeRemembered(remember ? email.trim() : null);
       await login(email.trim(), password, officeId);
     } catch (err: any) {
       if (err.data?.code === 'CHOOSE_OFFICE') setOffices(err.data.offices);
@@ -143,11 +164,13 @@ export const LoginView: React.FC = () => {
             </div>
           )}
           <Field label="Email">
-            <input type="email" autoComplete="username" required autoFocus value={email} onChange={(e) => setEmail(e.target.value)} className={inputClass} placeholder="you@handlemydesk.internal" />
+            <input type="email" inputMode="email" autoCapitalize="none" autoCorrect="off" autoComplete="username" required autoFocus={!email} value={email} onChange={(e) => setEmail(e.target.value)} className={inputClass} placeholder="you@company.com" />
           </Field>
-          <Field label="Password">
-            <input type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} className={inputClass} />
-          </Field>
+          <label className="-mt-1 flex items-center gap-2 text-[13px] text-fg-muted cursor-pointer">
+            <input type="checkbox" className="accent-accent" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
+            Remember my email on this device
+          </label>
+          <PasswordInput label="Password" autoComplete="current-password" required autoFocus={!!email} value={password} onChange={setPassword} />
           <div className="-mt-2 text-right">
             <button
               type="button"
@@ -170,7 +193,7 @@ export const LoginView: React.FC = () => {
               ))}
             </div>
           ) : (
-            <Button type="submit" className="w-full h-9" disabled={submitting || !email || !password}>
+            <Button type="submit" className="w-full h-9" disabled={submitting || !email.trim() || !password}>
               {submitting ? 'Signing in…' : 'Continue'}
             </Button>
           )}
