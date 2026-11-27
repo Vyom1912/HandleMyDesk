@@ -204,7 +204,7 @@ export const TaskEditorModal: React.FC<Props> = ({ open, task, defaults, onClose
           {tags.length > 0 && (
             <ul className="flex flex-wrap gap-1.5 mt-2" aria-label="Tags">
               {tags.map((t) => (
-                <li key={t} className="flex items-center gap-0.5 h-6 pl-2 pr-0.5 rounded bg-tone-gray-bg text-[13px] text-tone-gray-fg">
+                <li key={t} className="flex items-center gap-0.5 h-6 pl-2 pr-0.5 rounded bg-tone-gray-bg text-meta text-tone-gray-fg">
                   {t}
                   <button type="button" onClick={() => setTags(tags.filter((x) => x !== t))} className="w-5 h-5 flex items-center justify-center rounded hover:bg-selected" aria-label={`Remove tag ${t}`}>
                     <X size={11} />
@@ -216,7 +216,7 @@ export const TaskEditorModal: React.FC<Props> = ({ open, task, defaults, onClose
         </div>
 
         <fieldset>
-          <legend className="block text-[13px] font-medium text-fg-muted mb-1.5">
+          <legend className="block text-meta font-medium text-fg-muted mb-1.5">
             Checklist {subtasks.length > 0 && <span className="text-fg-faint font-normal">{doneCount}/{subtasks.length}</span>}
           </legend>
           <ul className="space-y-0.5">
@@ -235,7 +235,7 @@ export const TaskEditorModal: React.FC<Props> = ({ open, task, defaults, onClose
                   onChange={(e) => setSubtasks(subtasks.map((x) => (x.id === s.id ? { ...x, title: e.target.value } : x)))}
                   aria-label="Checklist item"
                 />
-                <IconButton label={`Remove “${s.title}”`} danger onClick={() => setSubtasks(subtasks.filter((x) => x.id !== s.id))} className="opacity-0 group-hover:opacity-100 focus:opacity-100">
+                <IconButton label={`Remove “${s.title}”`} danger onClick={() => setSubtasks(subtasks.filter((x) => x.id !== s.id))} className="hover-reveal">
                   <X size={13} />
                 </IconButton>
               </li>

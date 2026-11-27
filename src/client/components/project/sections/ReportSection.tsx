@@ -189,7 +189,7 @@ export const ReportSection: React.FC = () => {
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6 p-3 rounded-lg bg-subtle">
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[13px] text-fg-muted">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-meta text-fg-muted">
           <span className="text-fg font-medium">Include:</span>
           {(
             [

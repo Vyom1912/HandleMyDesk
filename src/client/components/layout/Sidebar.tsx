@@ -67,7 +67,7 @@ function readExpanded(userId: string): string[] {
 }
 
 // Finger-sized rows on touchscreens (the sidebar opens from Menu there); compact with a mouse
-const rowBase = 'group flex items-center gap-2.5 pointer-fine:gap-2 w-full h-10 pointer-fine:h-7 px-2.5 pointer-fine:px-2 rounded-md text-[15px] pointer-fine:text-sm text-left transition-colors';
+const rowBase = 'group flex items-center gap-2.5 pointer-fine:gap-2 w-full h-10 pointer-fine:h-7 px-2.5 pointer-fine:px-2 rounded-md text-body pointer-fine:text-sm text-left transition-colors';
 const rowIdle = 'text-fg-muted hover:bg-hover hover:text-fg';
 const rowActive = 'bg-selected text-fg font-medium';
 
@@ -159,7 +159,7 @@ export const Sidebar: React.FC = () => {
           </button>
           <button
             onClick={() => toggleFavorite(project.id)}
-            className={`w-8 h-8 pointer-fine:w-5 pointer-fine:h-5 shrink-0 flex items-center justify-center rounded hover:bg-selected ${isFavorite ? 'text-tone-amber-fg' : 'text-fg-faint opacity-0 group-hover:opacity-100 focus:opacity-100'}`}
+            className={`w-8 h-8 pointer-fine:w-5 pointer-fine:h-5 shrink-0 flex items-center justify-center rounded hover:bg-selected ${isFavorite ? 'text-tone-amber-fg' : 'text-fg-faint hover-reveal'}`}
             aria-label={isFavorite ? `Remove ${project.name} from favorites` : `Add ${project.name} to favorites`}
             aria-pressed={isFavorite}
           >
@@ -172,7 +172,7 @@ export const Sidebar: React.FC = () => {
               const sectionActive = isActive && route.view === 'project' && route.section === s.id;
               return (
                 <li key={s.id}>
-                  <button onClick={() => openProject(project.id, s.id)} className={`${rowBase} h-9 pointer-fine:h-[26px] text-sm pointer-fine:text-[13px] ${sectionActive ? rowActive : rowIdle}`} aria-current={sectionActive ? 'page' : undefined}>
+                  <button onClick={() => openProject(project.id, s.id)} className={`${rowBase} h-9 pointer-fine:h-[26px] text-sm pointer-fine:text-meta ${sectionActive ? rowActive : rowIdle}`} aria-current={sectionActive ? 'page' : undefined}>
                     <s.icon size={13} className="shrink-0 opacity-70" />
                     {s.label}
                   </button>
@@ -299,7 +299,7 @@ export const Sidebar: React.FC = () => {
               className={`${rowBase} ${rowIdle}`}
             >
               <Keyboard size={15} /> Keyboard shortcuts
-              <kbd className="ml-auto text-[11px] text-fg-faint font-sans">?</kbd>
+              <kbd className="ml-auto text-tiny text-fg-faint font-sans">?</kbd>
             </button>
             <button
               role="menuitem"
@@ -323,13 +323,13 @@ export const Sidebar: React.FC = () => {
         <button onClick={() => setIsProjectPickerOpen(true)} className={`${rowBase} ${rowIdle}`}>
           <Search size={15} className="shrink-0" />
           <span className="flex-1">Search</span>
-          <kbd className="text-[11px] text-fg-faint font-sans">Ctrl K</kbd>
+          <kbd className="text-tiny text-fg-faint font-sans">Ctrl K</kbd>
         </button>
         <button onClick={() => setIsNotificationsOpen(true)} className={`${rowBase} ${rowIdle}`}>
           <Inbox size={15} className="shrink-0" />
           <span className="flex-1">Inbox</span>
           {notificationCount > 0 && (
-            <span className="min-w-5 h-[18px] px-1.5 rounded-full bg-accent text-on-accent text-[11px] font-semibold flex items-center justify-center" aria-label={`${notificationCount} unread`}>
+            <span className="min-w-5 h-[18px] px-1.5 rounded-full bg-accent text-on-accent text-tiny font-semibold flex items-center justify-center" aria-label={`${notificationCount} unread`}>
               {notificationCount > 99 ? '99+' : notificationCount}
             </span>
           )}
@@ -373,7 +373,7 @@ export const Sidebar: React.FC = () => {
           )
         )}
         {openProjects.length === 0 ? (
-          <p className="px-2 py-1 text-[13px] text-fg-faint leading-snug">
+          <p className="px-2 py-1 text-meta text-fg-faint leading-snug">
             {canCreate ? 'No active projects yet. Use + to create one.' : "You're not on any active project yet. When a project manager adds you, it appears here."}
           </p>
         ) : (

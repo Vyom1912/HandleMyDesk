@@ -14,7 +14,7 @@ export const selectClass = `${inputClass} pr-8`;
 
 // Compact select used in toolbars
 export const toolbarSelectClass =
-  'h-10 pointer-fine:h-8 pl-3 pointer-fine:pl-2.5 pr-8 pointer-fine:pr-7 bg-surface border border-line rounded-md text-base pointer-fine:text-[13px] text-fg focus:outline-none focus:border-accent';
+  'h-10 pointer-fine:h-8 pl-3 pointer-fine:pl-2.5 pr-8 pointer-fine:pr-7 bg-surface border border-line rounded-md text-base pointer-fine:text-meta text-fg focus:outline-none focus:border-accent';
 
 // Wrapping the control in the <label> associates them without needing ids
 export const Field: React.FC<{ label: string; required?: boolean; hint?: string; className?: string; children: React.ReactNode }> = ({
@@ -25,7 +25,7 @@ export const Field: React.FC<{ label: string; required?: boolean; hint?: string;
   children,
 }) => (
   <label className={`block ${className}`}>
-    <span className="block text-[13px] font-medium text-fg-muted mb-1">
+    <span className="block text-meta font-medium text-fg-muted mb-1">
       {label}
       {required && (
         <span className="text-danger" aria-hidden="true">
@@ -59,8 +59,8 @@ export const Button: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & { 
     type={type}
     className={`inline-flex items-center justify-center gap-1.5 rounded-md font-medium whitespace-nowrap transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
       size === 'sm'
-        ? 'h-9 px-3 text-sm pointer-fine:h-7 pointer-fine:px-2.5 pointer-fine:text-[13px]'
-        : 'h-11 px-4 text-[15px] pointer-fine:h-8 pointer-fine:px-3 pointer-fine:text-sm'
+        ? 'h-9 px-3 text-sm pointer-fine:h-7 pointer-fine:px-2.5 pointer-fine:text-meta'
+        : 'h-11 px-4 text-body pointer-fine:h-8 pointer-fine:px-3 pointer-fine:text-sm'
     } ${VARIANTS[variant]} ${className}`}
     {...props}
   />
@@ -87,7 +87,7 @@ export const SectionHeader: React.FC<{ title: string; subtitle?: string; actions
   <div className="flex flex-wrap items-end justify-between gap-3">
     <div>
       <h2 className="text-base font-semibold text-fg">{title}</h2>
-      {subtitle && <p className="text-[13px] text-fg-muted mt-0.5">{subtitle}</p>}
+      {subtitle && <p className="text-meta text-fg-muted mt-0.5">{subtitle}</p>}
     </div>
     {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
   </div>
@@ -122,7 +122,7 @@ export const SearchInput: React.FC<{ value: string; onChange: (v: string) => voi
       placeholder={placeholder}
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="w-full h-10 pointer-fine:h-8 pl-8 pr-2.5 bg-surface border border-line rounded-md text-base pointer-fine:text-[13px] text-fg placeholder:text-fg-faint focus:outline-none focus:border-accent"
+      className="w-full h-10 pointer-fine:h-8 pl-8 pr-2.5 bg-surface border border-line rounded-md text-base pointer-fine:text-meta text-fg placeholder:text-fg-faint focus:outline-none focus:border-accent"
     />
   </div>
 );
@@ -146,7 +146,7 @@ export function Segmented<T extends string>({
           key={o.value}
           onClick={() => onChange(o.value)}
           aria-pressed={value === o.value}
-          className={`h-full px-3 pointer-fine:px-2.5 rounded text-sm pointer-fine:text-[13px] whitespace-nowrap transition-colors ${
+          className={`h-full px-3 pointer-fine:px-2.5 rounded text-sm pointer-fine:text-meta whitespace-nowrap transition-colors ${
             value === o.value ? 'bg-surface text-fg font-medium shadow-[0_1px_2px_rgb(0_0_0/0.08)]' : 'text-fg-muted hover:text-fg'
           }`}
         >

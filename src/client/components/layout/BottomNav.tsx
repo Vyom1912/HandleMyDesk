@@ -30,12 +30,12 @@ export const BottomNav: React.FC = () => {
               onClick={onClick}
               aria-current={active ? 'page' : undefined}
               aria-label={badge ? `${label}, ${badge} unread` : label}
-              className={`relative w-full h-full flex flex-col items-center justify-center gap-0.5 text-[11px] font-medium ${active ? 'text-fg' : 'text-fg-faint'}`}
+              className={`relative w-full h-full flex flex-col items-center justify-center gap-0.5 text-tiny font-medium ${active ? 'text-fg' : 'text-fg-faint'}`}
             >
               <span className="relative">
                 <Icon size={21} strokeWidth={active ? 2.2 : 1.8} />
                 {!!badge && badge > 0 && (
-                  <span className="absolute -top-1.5 -right-2.5 min-w-[18px] h-[18px] px-1 rounded-full bg-accent text-on-accent text-[10px] font-semibold flex items-center justify-center" aria-hidden="true">
+                  <span className="absolute -top-1.5 -right-2.5 min-w-[18px] h-[18px] px-1 rounded-full bg-accent text-on-accent text-micro font-semibold flex items-center justify-center" aria-hidden="true">
                     {badge > 99 ? '99+' : badge}
                   </span>
                 )}

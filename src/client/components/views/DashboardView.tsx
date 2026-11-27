@@ -10,7 +10,7 @@ import { GettingStarted } from './GettingStarted';
 
 const SectionTitle: React.FC<{ children: React.ReactNode; action?: React.ReactNode }> = ({ children, action }) => (
   <div className="flex items-center justify-between mb-2">
-    <h2 className="text-[13px] font-medium text-fg-muted">{children}</h2>
+    <h2 className="text-meta font-medium text-fg-muted">{children}</h2>
     {action}
   </div>
 );
@@ -72,7 +72,7 @@ export const DashboardView: React.FC = () => {
           const body = (
             <>
               <div className="text-lg sm:text-2xl font-semibold text-fg tabular-nums break-words">{k.value ?? '–'}</div>
-              <div className="text-[13px] text-fg-muted mt-0.5">{k.label}</div>
+              <div className="text-meta text-fg-muted mt-0.5">{k.label}</div>
             </>
           );
           const cls = `text-left px-4 sm:px-5 py-3.5 sm:py-4 ${i >= 2 ? 'border-t lg:border-t-0 border-line' : ''}`;
@@ -93,7 +93,7 @@ export const DashboardView: React.FC = () => {
           <section>
             <SectionTitle
               action={
-                <button onClick={() => navigate({ view: 'tasks' })} className="py-2.5 -my-2.5 pointer-fine:py-0 pointer-fine:my-0 text-[13px] text-fg-muted hover:text-fg">
+                <button onClick={() => navigate({ view: 'tasks' })} className="py-2.5 -my-2.5 pointer-fine:py-0 pointer-fine:my-0 text-meta text-fg-muted hover:text-fg">
                   All my tasks →
                 </button>
               }
@@ -114,7 +114,7 @@ export const DashboardView: React.FC = () => {
                           <span className="block text-sm text-fg truncate">{task.title}</span>
                           <span className="block text-xs text-fg-faint truncate">{task.projectName}</span>
                         </span>
-                        <span className={`text-[13px] tabular-nums shrink-0 ${overdue ? 'text-tone-red-fg' : 'text-fg-muted'}`}>{overdue ? `Overdue · ${formatDate(task.dueDate)}` : formatDate(task.dueDate)}</span>
+                        <span className={`text-meta tabular-nums shrink-0 ${overdue ? 'text-tone-red-fg' : 'text-fg-muted'}`}>{overdue ? `Overdue · ${formatDate(task.dueDate)}` : formatDate(task.dueDate)}</span>
                         <span className="hidden sm:block shrink-0">
                           <PriorityBadge priority={task.priority} />
                         </span>
@@ -142,7 +142,7 @@ export const DashboardView: React.FC = () => {
                           {task.projectName} · {task.assigneeName}
                         </span>
                       </span>
-                      <span className={`text-[13px] tabular-nums shrink-0 ${isOverdue(task.dueDate, false) ? 'text-tone-red-fg' : 'text-fg-muted'}`}>{formatDate(task.dueDate)}</span>
+                      <span className={`text-meta tabular-nums shrink-0 ${isOverdue(task.dueDate, false) ? 'text-tone-red-fg' : 'text-fg-muted'}`}>{formatDate(task.dueDate)}</span>
                       <PriorityBadge priority={task.priority} />
                     </button>
                   </li>
@@ -181,7 +181,7 @@ export const DashboardView: React.FC = () => {
                 return (
                   <li key={m.id}>
                     <button onClick={() => openProject(m.projectId, 'timeline')} className="w-full flex items-start gap-3 text-left group">
-                      <span className={`w-14 shrink-0 text-[13px] tabular-nums pt-px ${isOverdue(m.targetDate, false) ? 'text-tone-red-fg' : 'text-fg-faint'}`}>{formatDate(m.targetDate)}</span>
+                      <span className={`w-14 shrink-0 text-meta tabular-nums pt-px ${isOverdue(m.targetDate, false) ? 'text-tone-red-fg' : 'text-fg-faint'}`}>{formatDate(m.targetDate)}</span>
                       <span className="min-w-0">
                         <span className="block text-sm text-fg group-hover:underline underline-offset-2">{m.title}</span>
                         {project && <span className="block text-xs text-fg-faint truncate">{project.name}</span>}

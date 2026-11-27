@@ -126,7 +126,7 @@ export const DeliverablesSection: React.FC = () => {
   return (
     <div className="space-y-4 max-w-5xl">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-[13px] text-fg-muted">Formal deliverables and their sign-off.</p>
+        <p className="text-meta text-fg-muted">Formal deliverables and their sign-off.</p>
         {canManage && (
           <Button
             onClick={() => {
@@ -152,7 +152,7 @@ export const DeliverablesSection: React.FC = () => {
                     <h3 className="text-sm font-medium text-fg">{d.title}</h3>
                     <StatusBadge status={d.status} />
                   </div>
-                  {d.description && <p className="text-[13px] text-fg-muted mt-0.5">{d.description}</p>}
+                  {d.description && <p className="text-meta text-fg-muted mt-0.5">{d.description}</p>}
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-fg-faint mt-1">
                     <span>{d.ownerName}</span>
                     <span className={overdue ? 'text-tone-red-fg' : ''}>Due {formatDate(d.dueDate)}</span>

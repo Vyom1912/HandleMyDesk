@@ -65,7 +65,7 @@ const SignInDetails: React.FC<{ email: string; password: string; mustChange: boo
         Send these details to them by phone or message.{' '}
         {mustChange ? 'They will choose their own password the first time they sign in.' : 'They can keep this password.'} It is shown only once.
       </p>
-      <pre className="p-3 rounded-md bg-subtle border border-line text-[13px] whitespace-pre-wrap break-all font-mono">{details}</pre>
+      <pre className="p-3 rounded-md bg-subtle border border-line text-meta whitespace-pre-wrap break-all font-mono">{details}</pre>
       <Button variant="secondary" size="sm" onClick={copy}>
         {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? 'Copied' : 'Copy'}
       </Button>
@@ -266,7 +266,7 @@ export const OwnerConsole: React.FC = () => {
               <Icon size={15} />
               {text}
               {value === 'problems' && count > 0 && (
-                <span className="min-w-5 h-[18px] px-1.5 rounded-full bg-accent text-on-accent text-[11px] font-semibold flex items-center justify-center">{count}</span>
+                <span className="min-w-5 h-[18px] px-1.5 rounded-full bg-accent text-on-accent text-tiny font-semibold flex items-center justify-center">{count}</span>
               )}
             </button>
           ))}
@@ -389,7 +389,7 @@ const OfficesTab: React.FC<{
               <OfficeMark office={o} />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h2 className="text-[15px] font-semibold truncate">{o.name}</h2>
+                  <h2 className="text-body font-semibold truncate">{o.name}</h2>
                   {o.status === 'suspended' ? <Tag tone="amber">Paused</Tag> : <Tag tone="green">Active</Tag>}
                   {o.id === 'main' && <Tag>First office</Tag>}
                 </div>
@@ -408,7 +408,7 @@ const OfficesTab: React.FC<{
               <Stat label="Overdue" value={o.overdueTasks} tone={o.overdueTasks ? 'red' : undefined} />
               <Stat label="Problems" value={o.openTickets} tone={o.openTickets ? 'red' : undefined} />
             </div>
-            {o.notes && <p className="text-[13px] text-fg-muted mt-3 whitespace-pre-line">{o.notes}</p>}
+            {o.notes && <p className="text-meta text-fg-muted mt-3 whitespace-pre-line">{o.notes}</p>}
 
             <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-line">
               <Button size="sm" onClick={() => onEnter(o)}>
@@ -719,14 +719,14 @@ const ProblemsTab: React.FC<{
         ) : (
           <div className="border border-line rounded-lg bg-surface">
             <div className="p-4 border-b border-line">
-              <button onClick={() => setSelectedId(null)} className="lg:hidden flex items-center gap-1 text-[13px] text-fg-muted mb-2">
+              <button onClick={() => setSelectedId(null)} className="lg:hidden flex items-center gap-1 text-meta text-fg-muted mb-2">
                 <ArrowLeft size={14} /> All problems
               </button>
               <div className="flex items-start gap-2 flex-wrap">
                 <h2 className="text-base font-semibold flex-1 min-w-0">{selected.subject}</h2>
                 {selected.status === 'resolved' ? <Tag tone="green">Resolved</Tag> : <Tag tone="amber">Open</Tag>}
               </div>
-              <p className="text-[13px] text-fg-muted mt-1">
+              <p className="text-meta text-fg-muted mt-1">
                 <Tag tone={CATEGORY_TONE[selected.category]}>{CATEGORY_LABEL[selected.category]}</Tag> {selected.officeName} · {selected.userName} ({selected.userEmail})
               </p>
               <div className="flex flex-wrap gap-2 mt-3">
@@ -764,7 +764,7 @@ const ProblemsTab: React.FC<{
               {selected.messages.map((m) => (
                 <li key={m.id} className={`max-w-[85%] ${m.from === 'owner' ? 'ml-auto' : ''}`}>
                   <div className={`px-3 py-2 rounded-lg text-sm whitespace-pre-wrap break-words ${m.from === 'owner' ? 'bg-accent-soft text-fg' : 'bg-subtle text-fg'}`}>{m.text}</div>
-                  <div className={`text-[11px] text-fg-faint mt-0.5 ${m.from === 'owner' ? 'text-right' : ''}`}>
+                  <div className={`text-tiny text-fg-faint mt-0.5 ${m.from === 'owner' ? 'text-right' : ''}`}>
                     {m.name} · {formatDateTime(m.at)}
                   </div>
                 </li>

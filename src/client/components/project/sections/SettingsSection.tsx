@@ -32,7 +32,7 @@ const Row: React.FC<{ title: string; description: string; children: React.ReactN
   <div className="grid grid-cols-1 md:grid-cols-[220px_minmax(0,1fr)] gap-x-8 gap-y-3 py-6 border-b border-line last:border-b-0">
     <div>
       <h3 className="text-sm font-medium text-fg">{title}</h3>
-      <p className="text-[13px] text-fg-muted mt-0.5">{description}</p>
+      <p className="text-meta text-fg-muted mt-0.5">{description}</p>
     </div>
     <div className="space-y-3">{children}</div>
   </div>
@@ -68,7 +68,7 @@ const SaveAsTemplate: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3 border border-line rounded-lg">
         <div>
           <div className="text-sm text-fg">Save as template</div>
-          <p className="text-[13px] text-fg-muted">
+          <p className="text-meta text-fg-muted">
             Start future projects with this project's {tasks.length} tasks and {milestones.length} milestones. Dates are kept as days from the start.
           </p>
         </div>
@@ -105,7 +105,7 @@ const SaveAsTemplate: React.FC = () => {
           <Field label="What it's for">
             <textarea rows={2} className={textareaClass} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="e.g. Our standard e-commerce build" />
           </Field>
-          <p className="text-[13px] text-fg-muted">Tasks are copied without their assignees, comments or progress.</p>
+          <p className="text-meta text-fg-muted">Tasks are copied without their assignees, comments or progress.</p>
         </div>
       </Modal>
     </section>
@@ -179,7 +179,7 @@ export const SettingsSection: React.FC = () => {
   return (
     <div className="max-w-4xl">
       {!canManage && (
-        <div className="flex items-start gap-2 mb-2 p-3 rounded-md bg-subtle text-[13px] text-fg-muted">
+        <div className="flex items-start gap-2 mb-2 p-3 rounded-md bg-subtle text-meta text-fg-muted">
           <Lock size={14} className="shrink-0 mt-0.5" />
           Only the project lead ({project.leadName}) or an administrator can change these settings.
         </div>
@@ -205,7 +205,7 @@ export const SettingsSection: React.FC = () => {
               <input className={inputClass} value={form.category} onChange={(e) => set({ category: e.target.value })} />
             </Field>
             <Field label="Description" hint="Shown on the project overview. Markdown supported.">
-              <textarea rows={5} className={`${textareaClass} font-mono text-[13px]`} value={form.description} onChange={(e) => set({ description: e.target.value })} />
+              <textarea rows={5} className={`${textareaClass} font-mono text-meta`} value={form.description} onChange={(e) => set({ description: e.target.value })} />
             </Field>
           </Row>
 
@@ -263,7 +263,7 @@ export const SettingsSection: React.FC = () => {
                 {error}
               </p>
             )}
-            {dirty && !error && <span className="mr-auto text-[13px] text-fg-faint">Unsaved changes</span>}
+            {dirty && !error && <span className="mr-auto text-meta text-fg-faint">Unsaved changes</span>}
             <Button variant="secondary" disabled={!dirty} onClick={() => setForm(original)}>
               Discard
             </Button>
@@ -285,7 +285,7 @@ export const SettingsSection: React.FC = () => {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3">
               <div>
                 <div className="text-sm text-fg">{project.status === 'archived' ? 'Restore project' : 'Archive project'}</div>
-                <p className="text-[13px] text-fg-muted">
+                <p className="text-meta text-fg-muted">
                   {project.status === 'archived' ? 'Make the project active again for its whole team.' : 'Hide it from members without deleting anything.'}
                 </p>
               </div>
@@ -302,7 +302,7 @@ export const SettingsSection: React.FC = () => {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3">
               <div>
                 <div className="text-sm text-fg">Delete project</div>
-                <p className="text-[13px] text-fg-muted">Permanently removes the project and everything in it.</p>
+                <p className="text-meta text-fg-muted">Permanently removes the project and everything in it.</p>
               </div>
               <Button variant="danger" onClick={remove}>
                 Delete

@@ -25,7 +25,7 @@ export const KanbanSection: React.FC = () => {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-[13px] text-fg-muted">
+        <p className="text-meta text-fg-muted">
           <span className="pointer-coarse:hidden">Drag cards between columns, or use the arrows on each card.</span>
           <span className="hidden pointer-coarse:inline">Swipe across the columns; move a card with its arrows.</span>
         </p>
@@ -55,8 +55,8 @@ export const KanbanSection: React.FC = () => {
             >
               <div className="flex items-center gap-2 h-7 px-1.5 mb-1.5">
                 <StatusDot status={column.value} />
-                <h3 className="text-[13px] font-medium text-fg">{column.label}</h3>
-                <span className="text-[13px] text-fg-faint tabular-nums">{columnTasks.length}</span>
+                <h3 className="text-meta font-medium text-fg">{column.label}</h3>
+                <span className="text-meta text-fg-faint tabular-nums">{columnTasks.length}</span>
               </div>
 
               <ul className="space-y-1.5 flex-1">
@@ -78,7 +78,7 @@ export const KanbanSection: React.FC = () => {
                         dragTaskId === t.id ? 'opacity-40' : ''
                       }`}
                     >
-                      <button onClick={() => openTaskEditor(t)} className="block w-full py-2.5 -my-2.5 pointer-fine:py-0 pointer-fine:my-0 text-left text-[15px] pointer-fine:text-sm text-fg leading-snug hover:underline underline-offset-2">
+                      <button onClick={() => openTaskEditor(t)} className="block w-full py-2.5 -my-2.5 pointer-fine:py-0 pointer-fine:my-0 text-left text-body pointer-fine:text-sm text-fg leading-snug hover:underline underline-offset-2">
                         {t.title}
                       </button>
                       <div className="flex flex-wrap items-center gap-1.5 mt-2">
@@ -96,7 +96,7 @@ export const KanbanSection: React.FC = () => {
                           <span className={`text-xs ${isOverdue(t.dueDate, t.status === 'done') ? 'text-tone-red-fg' : 'text-fg-faint'}`}>{formatDate(t.dueDate)}</span>
                         </div>
                         {/* Keyboard and touch alternative to dragging */}
-                        <div className="flex opacity-0 group-hover:opacity-100 focus-within:opacity-100">
+                        <div className="flex hover-reveal">
                           <button
                             disabled={colIndex === 0}
                             onClick={() => move(t, TASK_STATUS_OPTIONS[colIndex - 1].value)}
@@ -121,7 +121,7 @@ export const KanbanSection: React.FC = () => {
               </ul>
               <button
                 onClick={() => openTaskEditor(undefined, { status: column.value })}
-                className="mt-1.5 w-full h-8 rounded-md text-[13px] text-fg-faint hover:text-fg hover:bg-hover flex items-center gap-1.5 px-2"
+                className="mt-1.5 w-full h-8 rounded-md text-meta text-fg-faint hover:text-fg hover:bg-hover flex items-center gap-1.5 px-2"
               >
                 <Plus size={14} /> New
               </button>

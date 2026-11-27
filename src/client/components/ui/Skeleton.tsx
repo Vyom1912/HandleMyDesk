@@ -25,7 +25,7 @@ export const WakingUpNote: React.FC<{ after?: number; className?: string }> = ({
   const long = useTakingLong(after);
   if (!long) return null;
   return (
-    <p role="status" className={`text-[13px] text-fg-muted animate-fade-in ${className}`}>
+    <p role="status" className={`text-meta text-fg-muted animate-fade-in ${className}`}>
       The server is waking up. This can take up to a minute the first time; please keep this page open.
     </p>
   );

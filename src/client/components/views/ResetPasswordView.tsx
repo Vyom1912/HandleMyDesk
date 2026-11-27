@@ -73,7 +73,7 @@ export const ResetPasswordView: React.FC<{ token: string }> = ({ token }) => {
               <AlertCircle size={15} className="shrink-0 mt-0.5" />
               <span>{problem}</span>
             </div>
-            <Button className="w-full h-9" onClick={toSignIn}>
+            <Button className="w-full h-11 pointer-fine:h-9" onClick={toSignIn}>
               Back to sign in
             </Button>
           </div>
@@ -99,7 +99,7 @@ export const ResetPasswordView: React.FC<{ token: string }> = ({ token }) => {
             <input type="email" autoComplete="username" value={info.email} readOnly hidden />
             <PasswordInput label="New password" hint="At least 8 characters" autoComplete="new-password" autoFocus required meter avoid={guessableWords(info)} value={password} onChange={setPassword} />
             <PasswordInput label="Repeat new password" autoComplete="new-password" required matchWith={password} value={repeat} onChange={setRepeat} />
-            <Button type="submit" className="w-full h-9" disabled={saving || !password || !repeat}>
+            <Button type="submit" className="w-full h-11 pointer-fine:h-9" disabled={saving || !password || !repeat}>
               {saving ? 'Saving…' : 'Save and sign in'}
             </Button>
             <p className="text-xs text-fg-faint">This signs you out on every other device.</p>

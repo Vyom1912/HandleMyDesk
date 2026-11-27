@@ -51,10 +51,10 @@ export const SetPasswordView: React.FC = () => {
           <PasswordInput label="Temporary password" autoComplete="current-password" autoFocus required value={current} onChange={setCurrent} />
           <PasswordInput label="New password" hint="At least 8 characters" autoComplete="new-password" required meter avoid={avoid} value={next} onChange={setNext} />
           <PasswordInput label="Repeat new password" autoComplete="new-password" required matchWith={next} value={confirm} onChange={setConfirm} />
-          <Button type="submit" className="w-full h-9" disabled={saving || !current || !next || !confirm}>
+          <Button type="submit" className="w-full h-11 pointer-fine:h-9" disabled={saving || !current || !next || !confirm}>
             {saving ? 'Saving…' : 'Save and continue'}
           </Button>
-          <button type="button" onClick={logout} className="w-full text-[13px] text-fg-muted hover:text-fg">
+          <button type="button" onClick={logout} className="w-full text-meta text-fg-muted hover:text-fg">
             Sign out
           </button>
         </form>

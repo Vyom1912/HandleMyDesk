@@ -108,7 +108,7 @@ export const NotesSection: React.FC = () => {
               </li>
             );
           })}
-          {notes.length === 0 && <li className="px-2 py-2 text-[13px] text-fg-faint">No notes yet.</li>}
+          {notes.length === 0 && <li className="px-2 py-2 text-meta text-fg-faint">No notes yet.</li>}
         </ul>
       </div>
 
@@ -125,7 +125,7 @@ export const NotesSection: React.FC = () => {
               placeholder="Untitled"
             />
             <div className="flex items-center gap-2">
-              <span className="text-[13px] text-fg-faint">Type</span>
+              <span className="text-meta text-fg-faint">Type</span>
               <select aria-label="Note type" className={`${selectClass} w-40 h-8`} value={category} onChange={(e) => setCategory(e.target.value as ProjectNote['category'])}>
                 {CATEGORIES.map((c) => (
                   <option key={c} value={c}>
@@ -137,7 +137,7 @@ export const NotesSection: React.FC = () => {
             <textarea
               rows={18}
               aria-label="Note content"
-              className={`${textareaClass} font-mono text-[13px] leading-relaxed`}
+              className={`${textareaClass} font-mono text-meta leading-relaxed`}
               value={content}
               onChange={(e) => setContent(e.target.value)}
               onKeyDown={(e) => (e.ctrlKey || e.metaKey) && e.key === 'Enter' && save()}
@@ -167,7 +167,7 @@ export const NotesSection: React.FC = () => {
                 </div>
               )}
             </div>
-            <div className="text-[13px] text-fg-faint mt-1 mb-6">
+            <div className="text-meta text-fg-faint mt-1 mb-6">
               {label(selected.category)} · {selected.authorName} · edited {formatDateTime(selected.updatedAt)}
             </div>
             {selected.content.trim() ? <Markdown source={selected.content} /> : <p className="text-sm text-fg-faint">This note is empty.</p>}

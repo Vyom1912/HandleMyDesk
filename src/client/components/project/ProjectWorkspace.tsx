@@ -314,13 +314,13 @@ export const ProjectWorkspace: React.FC<{ projectId: string }> = ({ projectId })
             <>
               <button
                 onClick={() => openProject(projectId, 'report')}
-                className="h-10 pointer-fine:h-7 px-2.5 pointer-fine:px-2 flex items-center gap-1.5 rounded-md text-[13px] text-fg-muted hover:bg-hover hover:text-fg"
+                className="h-10 pointer-fine:h-7 px-2.5 pointer-fine:px-2 flex items-center gap-1.5 rounded-md text-meta text-fg-muted hover:bg-hover hover:text-fg"
                 title="A printable summary to share with the client"
               >
                 <FileText size={14} />
                 <span className="hidden sm:inline">Client summary</span>
               </button>
-              <button onClick={copyLink} className="h-10 pointer-fine:h-7 px-2.5 pointer-fine:px-2 flex items-center gap-1.5 rounded-md text-[13px] text-fg-muted hover:bg-hover hover:text-fg" title="Copy a link to this page">
+              <button onClick={copyLink} className="h-10 pointer-fine:h-7 px-2.5 pointer-fine:px-2 flex items-center gap-1.5 rounded-md text-meta text-fg-muted hover:bg-hover hover:text-fg" title="Copy a link to this page">
                 <LinkIcon size={14} />
                 <span className="hidden sm:inline">Copy link</span>
               </button>
@@ -363,7 +363,7 @@ export const ProjectWorkspace: React.FC<{ projectId: string }> = ({ projectId })
                       key={s.id}
                       onClick={() => openProject(projectId, s.id)}
                       aria-current={active ? 'page' : undefined}
-                      className={`relative shrink-0 h-11 pointer-fine:h-9 px-2.5 mx-0.5 text-[15px] pointer-fine:text-sm whitespace-nowrap transition-colors ${
+                      className={`relative shrink-0 h-11 pointer-fine:h-9 px-2.5 mx-0.5 text-body pointer-fine:text-sm whitespace-nowrap transition-colors ${
                         active ? 'text-fg font-medium' : 'text-fg-muted hover:text-fg'
                       }`}
                     >

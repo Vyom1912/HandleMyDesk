@@ -430,8 +430,9 @@ app.post('/api/auth/logout-all', authMiddleware, (req: AuthenticatedRequest, res
   res.json({ success: true });
 });
 
+// The HandleMyDesk support account (used while the owner visits) isn't one of the office's people
 app.get('/api/employees', authMiddleware, (req: AuthenticatedRequest, res: Response) => {
-  res.json(db.getData().users);
+  res.json(db.getData().users.filter((u) => u.id !== 'hmd-support' || req.user!.id === 'hmd-support'));
 });
 
 // Company single sign-on (OpenID Connect); inactive unless configured in .env
@@ -1975,8 +1976,9 @@ app.post(
     const user = req.user!;
     const database = db.getData();
     const project = getProject(req);
-    const targetEmployee = database.users.find((u) => u.id === req.body?.employeeId);
+    const targetEmployee = database.users.find((u) => u.id === req.body?.employeeId && u.id !== 'hmd-support');
     if (!targetEmployee) throw new HttpError(404, 'Employee not found');
+    if (targetEmployee.active === false) throw new HttpError(400, `${targetEmployee.name}'s account is deactivated`);
 
     if (!project.teamMemberIds.includes(targetEmployee.id)) {
       project.teamMemberIds.push(targetEmployee.id);

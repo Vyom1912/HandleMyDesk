@@ -218,7 +218,7 @@ export const TeamView: React.FC = () => {
           ))}
         </select>
         {isAdmin && inactiveCount > 0 && (
-          <label className="flex items-center gap-2 h-8 px-1 text-[13px] text-fg-muted">
+          <label className="flex items-center gap-2 h-8 px-1 text-meta text-fg-muted">
             <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} className="accent-accent" />
             Show deactivated ({inactiveCount})
           </label>
@@ -252,17 +252,17 @@ export const TeamView: React.FC = () => {
                       {emp.id === currentUser?.id && <Tag>You</Tag>}
                       {inactive && <Tag tone="red">Deactivated</Tag>}
                     </div>
-                    <div className="text-[13px] text-fg-faint truncate">{emp.title}</div>
+                    <div className="text-meta text-fg-faint truncate">{emp.title}</div>
                   </div>
                 </div>
-                <span className="hidden md:block text-[13px] text-fg-muted truncate">{emp.department}</span>
-                <span className="text-[13px] text-fg-muted justify-self-end md:justify-self-start" title={ROLE_HELP[emp.role]}>
+                <span className="hidden md:block text-meta text-fg-muted truncate">{emp.department}</span>
+                <span className="text-meta text-fg-muted justify-self-end md:justify-self-start" title={ROLE_HELP[emp.role]}>
                   {label(emp.role)}
                 </span>
-                <a href={`mailto:${emp.email}`} className="hidden md:block py-2.5 -my-2.5 pointer-fine:py-0 pointer-fine:my-0 text-[13px] text-fg-muted truncate hover:text-accent-ink hover:underline underline-offset-2">
+                <a href={`mailto:${emp.email}`} className="hidden md:block py-2.5 -my-2.5 pointer-fine:py-0 pointer-fine:my-0 text-meta text-fg-muted truncate hover:text-accent-ink hover:underline underline-offset-2">
                   {emp.email}
                 </a>
-                <a href={`tel:${emp.phone}`} className="hidden md:block py-2.5 -my-2.5 pointer-fine:py-0 pointer-fine:my-0 text-[13px] text-fg-muted tabular-nums hover:text-accent-ink">
+                <a href={`tel:${emp.phone}`} className="hidden md:block py-2.5 -my-2.5 pointer-fine:py-0 pointer-fine:my-0 text-meta text-fg-muted tabular-nums hover:text-accent-ink">
                   {emp.phone}
                 </a>
                 {isAdmin && (
@@ -379,14 +379,14 @@ export const TeamView: React.FC = () => {
             )}
           </div>
           <fieldset>
-            <legend className="block text-[13px] font-medium text-fg-muted mb-1">Role</legend>
+            <legend className="block text-meta font-medium text-fg-muted mb-1">Role</legend>
             <div className="space-y-1">
               {(['member', 'pm', 'admin'] as const).map((r) => (
                 <label key={r} className={`flex items-start gap-2.5 p-2 rounded-md border cursor-pointer ${form.role === r ? 'border-accent bg-accent-soft' : 'border-line hover:bg-hover'}`}>
                   <input type="radio" name="role" value={r} checked={form.role === r} onChange={() => set({ role: r })} className="mt-1 accent-accent" />
                   <span>
                     <span className="block text-sm text-fg">{label(r)}</span>
-                    <span className="block text-[13px] text-fg-muted">{ROLE_HELP[r]}</span>
+                    <span className="block text-meta text-fg-muted">{ROLE_HELP[r]}</span>
                   </span>
                 </label>
               ))}

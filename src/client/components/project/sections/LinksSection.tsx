@@ -158,7 +158,7 @@ export const LinksSection: React.FC = () => {
       ) : (
         grouped.map((group) => (
           <section key={group.value} aria-labelledby={`links-${group.value}`}>
-            <h3 id={`links-${group.value}`} className="flex items-center gap-1.5 text-[13px] font-medium text-fg-muted mb-1.5">
+            <h3 id={`links-${group.value}`} className="flex items-center gap-1.5 text-meta font-medium text-fg-muted mb-1.5">
               <group.icon size={14} /> {group.label}
             </h3>
             <ul className="border border-line rounded-lg divide-y divide-line">
@@ -171,13 +171,13 @@ export const LinksSection: React.FC = () => {
                         <span className="truncate">{link.title}</span>
                         <ExternalLink size={12} className="text-fg-faint shrink-0" aria-label="(opens in a new tab)" />
                       </div>
-                      <div className="text-[13px] text-fg-faint truncate">
+                      <div className="text-meta text-fg-faint truncate">
                         {hostOf(link.url)}
                         {link.description && ` · ${link.description}`}
                       </div>
                     </a>
                     {canEdit && (
-                      <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100">
+                      <div className="flex gap-0.5 hover-reveal">
                         <IconButton
                           label={`Edit ${link.title}`}
                           onClick={() => {

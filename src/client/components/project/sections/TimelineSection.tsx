@@ -133,7 +133,7 @@ export const TimelineSection: React.FC = () => {
   return (
     <div className="space-y-5 max-w-4xl">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-[13px] text-fg-muted">Key targets in date order.</p>
+        <p className="text-meta text-fg-muted">Key targets in date order.</p>
         {canManage && (
           <Button onClick={() => openEditor(null)}>
             <Plus size={15} /> New milestone
@@ -150,7 +150,7 @@ export const TimelineSection: React.FC = () => {
             const last = i === sorted.length - 1;
             return (
               <li key={m.id} className="group relative grid grid-cols-[72px_20px_minmax(0,1fr)] gap-x-3">
-                <div className={`pt-0.5 text-[13px] tabular-nums text-right ${overdue ? 'text-tone-red-fg' : 'text-fg-faint'}`}>{formatDate(m.targetDate)}</div>
+                <div className={`pt-0.5 text-meta tabular-nums text-right ${overdue ? 'text-tone-red-fg' : 'text-fg-faint'}`}>{formatDate(m.targetDate)}</div>
                 <div className="relative flex justify-center">
                   {!last && <span aria-hidden="true" className="absolute top-5 bottom-0 w-px bg-line" />}
                   <span
@@ -165,7 +165,7 @@ export const TimelineSection: React.FC = () => {
                     <h3 className="text-sm font-medium text-fg">{m.title}</h3>
                     <StatusBadge status={overdue ? 'overdue' : m.status} />
                     {canManage && (
-                      <div className="ml-auto flex gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100">
+                      <div className="ml-auto flex gap-0.5 hover-reveal">
                         <IconButton label={`Edit ${m.title}`} onClick={() => openEditor(m)}>
                           <Pencil size={14} />
                         </IconButton>
@@ -175,7 +175,7 @@ export const TimelineSection: React.FC = () => {
                       </div>
                     )}
                   </div>
-                  {m.description && <p className="text-[13px] text-fg-muted mt-0.5">{m.description}</p>}
+                  {m.description && <p className="text-meta text-fg-muted mt-0.5">{m.description}</p>}
                   <div className="flex items-center gap-3 mt-2">
                     <div className="w-40 h-1 rounded-full bg-hover overflow-hidden" role="progressbar" aria-valuenow={m.progress} aria-valuemin={0} aria-valuemax={100} aria-label={`${m.title} progress`}>
                       <div className={`h-full ${m.status === 'completed' ? 'bg-tone-green-fg' : 'bg-accent'}`} style={{ width: `${m.progress}%` }} />

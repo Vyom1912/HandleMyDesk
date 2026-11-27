@@ -55,8 +55,8 @@ const ProfileSection: React.FC = () => {
       <div className="flex items-center gap-4">
         <Avatar src={currentUser.avatar} name={currentUser.name} size={56} />
         <div className="min-w-0 flex-1">
-          <div className="text-[13px] text-fg-muted truncate">{currentUser.email}</div>
-          <div className="text-[13px] text-fg-faint">{label(currentUser.role)} · set by an administrator</div>
+          <div className="text-meta text-fg-muted truncate">{currentUser.email}</div>
+          <div className="text-meta text-fg-faint">{label(currentUser.role)} · set by an administrator</div>
           <div className="flex flex-wrap gap-1.5 mt-2">
             <input ref={fileRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="sr-only" tabIndex={-1} onChange={(e) => pickPhoto(e.target.files?.[0])} />
             <Button size="sm" variant="secondary" onClick={() => fileRef.current?.click()} disabled={uploading}>
@@ -72,7 +72,7 @@ const ProfileSection: React.FC = () => {
       </div>
 
       <div>
-        <span className="block text-[13px] font-medium text-fg-muted mb-1">Status</span>
+        <span className="block text-meta font-medium text-fg-muted mb-1">Status</span>
         <Segmented
           label="Status"
           value={currentUser.status}
@@ -181,7 +181,7 @@ export const AccountModal: React.FC = () => {
 
       <form id="password-form" onSubmit={handleChangePassword} className="space-y-3">
         <h3 className="text-sm font-semibold text-fg">Change password</h3>
-        <p className="text-[13px] text-fg-muted">This also signs you out on your other devices.</p>
+        <p className="text-meta text-fg-muted">This also signs you out on your other devices.</p>
         {error && (
           <p role="alert" className="text-sm text-tone-red-fg">
             {error}
@@ -195,7 +195,7 @@ export const AccountModal: React.FC = () => {
       <div className="mt-6 pt-4 border-t border-line flex flex-wrap items-center justify-between gap-3">
         <div>
           <h3 className="text-sm font-semibold text-fg">Signed in somewhere else?</h3>
-          <p className="text-[13px] text-fg-muted">End every session on every device, for example after using a shared computer.</p>
+          <p className="text-meta text-fg-muted">End every session on every device, for example after using a shared computer.</p>
         </div>
         <Button variant="secondary" onClick={handleSignOutEverywhere}>
           Sign out of all devices

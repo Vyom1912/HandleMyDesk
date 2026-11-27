@@ -50,7 +50,7 @@ const ConnectionNotice: React.FC = () => {
   }, [connection]);
   if (!visible || connection === 'online') return null;
   return (
-    <div role="status" className="fixed top-3 left-1/2 -translate-x-1/2 z-[60] flex items-center gap-2 h-8 px-3 rounded-full bg-fg text-canvas text-[13px] shadow-lg animate-fade-in">
+    <div role="status" className="fixed top-3 left-1/2 -translate-x-1/2 z-[60] flex items-center gap-2 h-8 px-3 rounded-full bg-fg text-canvas text-meta shadow-lg animate-fade-in">
       <span className="w-2 h-2 rounded-full bg-tone-amber-bg animate-pulse" aria-hidden="true" />
       {connection === 'offline' ? "You're offline. Changes can't be saved until the connection is back." : 'Reconnecting… live updates are paused.'}
     </div>
@@ -63,7 +63,7 @@ const SupportVisitBanner: React.FC = () => {
   const office = useOffice();
   if (!office?.supportVisit) return null;
   return (
-    <div role="status" className="fixed bottom-[calc(4rem+env(safe-area-inset-bottom))] lg:bottom-4 left-1/2 -translate-x-1/2 z-[60] flex items-center gap-3 max-w-[calc(100vw-2rem)] pl-4 pr-1.5 py-1.5 rounded-full bg-fg text-canvas text-[13px] shadow-lg">
+    <div role="status" className="fixed bottom-[calc(4rem+env(safe-area-inset-bottom))] lg:bottom-4 left-1/2 -translate-x-1/2 z-[60] flex items-center gap-3 max-w-[calc(100vw-2rem)] pl-4 pr-1.5 py-1.5 rounded-full bg-fg text-canvas text-meta shadow-lg">
       <LifeBuoy size={15} className="shrink-0" />
       <span className="truncate">
         Support visit: <strong>{office.name}</strong>

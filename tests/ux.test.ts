@@ -150,3 +150,54 @@ describe('Exports for administrators', () => {
     expect((await request(app).get('/api/admin/export/people.csv').set(as('emp-5'))).status).toBe(403);
   });
 });
+
+describe('Project team', () => {
+  const memberIds = (p: any) => new Set<string>([p.leadId, ...p.teamMemberIds]);
+
+  it('an administrator adds someone from the office to a project, and they can then open it', async () => {
+    const data = db.getData();
+    const project = data.projects[0];
+    const outsider = data.users.find((u) => u.role === 'member' && u.active !== false && !memberIds(project).has(u.id))!;
+    expect(outsider).toBeDefined();
+    expect((await request(app).get(`/api/projects/${project.id}`).set(as(outsider.id))).status).toBe(403);
+
+    const res = await request(app).post(`/api/projects/${project.id}/team`).set(as('emp-1')).send({ employeeId: outsider.id });
+    expect(res.status).toBe(200);
+    expect(res.body.map((u: any) => u.id)).toContain(outsider.id);
+    expect((await request(app).get(`/api/projects/${project.id}`).set(as(outsider.id))).status).toBe(200);
+    const inbox = (await request(app).get('/api/notifications').set(as(outsider.id))).body;
+    expect(inbox.some((n: any) => n.kind === 'team' && n.message.includes(project.name))).toBe(true);
+
+    // Removing them takes the access away again
+    expect((await request(app).delete(`/api/projects/${project.id}/team/${outsider.id}`).set(as('emp-1'))).status).toBe(200);
+    expect((await request(app).get(`/api/projects/${project.id}`).set(as(outsider.id))).status).toBe(403);
+  });
+
+  it('only the project lead or an administrator can change the team', async () => {
+    const data = db.getData();
+    const project = data.projects.find((p) => data.users.some((u) => u.role === 'member' && p.teamMemberIds.includes(u.id)))!;
+    const member = data.users.find((u) => u.role === 'member' && project.teamMemberIds.includes(u.id))!;
+    const outsider = data.users.find((u) => u.active !== false && !memberIds(project).has(u.id))!;
+    expect((await request(app).post(`/api/projects/${project.id}/team`).set(as(member.id)).send({ employeeId: outsider.id })).status).toBe(403);
+    const lead = data.users.find((u) => u.id === project.leadId)!;
+    if (lead.role === 'pm') {
+      expect((await request(app).post(`/api/projects/${project.id}/team`).set(as(lead.id)).send({ employeeId: outsider.id })).status).toBe(200);
+    }
+  });
+
+  it('refuses deactivated people and the HandleMyDesk support account, which offices never see', async () => {
+    const data = db.getData();
+    const project = data.projects[0];
+    const someone = data.users.find((u) => u.role === 'member' && !memberIds(project).has(u.id))!;
+    someone.active = false;
+    db.save();
+    expect((await request(app).post(`/api/projects/${project.id}/team`).set(as('emp-1')).send({ employeeId: someone.id })).status).toBe(400);
+
+    const owner = (await login('owner@handlemydesk.internal', 'handlemydesk123')).body.token;
+    await request(app).post('/api/owner/offices/main/enter').set(bearer(owner));
+    expect(db.getData().users.some((u) => u.id === 'hmd-support')).toBe(true);
+    const people = (await request(app).get('/api/employees').set(as('emp-1'))).body;
+    expect(people.some((u: any) => u.id === 'hmd-support')).toBe(false);
+    expect((await request(app).post(`/api/projects/${project.id}/team`).set(as('emp-1')).send({ employeeId: 'hmd-support' })).status).toBe(404);
+  });
+});

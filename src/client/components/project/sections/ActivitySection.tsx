@@ -62,7 +62,7 @@ export const ActivitySection: React.FC = () => {
             loadMoreActivity().finally(() => setLoading(false));
           }}
           disabled={loading}
-          className="h-8 px-3 rounded-md border border-line text-[13px] text-fg-muted hover:text-fg hover:bg-hover disabled:opacity-50"
+          className="h-8 px-3 rounded-md border border-line text-meta text-fg-muted hover:text-fg hover:bg-hover disabled:opacity-50"
         >
           {loading ? 'Loading…' : 'Load older activity'}
         </button>

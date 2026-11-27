@@ -167,7 +167,7 @@ export const AdminView: React.FC = () => {
           </Button>
         </div>
 
-        <div className={`mt-4 p-3 rounded-md text-[13px] ${newest ? 'bg-subtle text-fg-muted' : 'bg-tone-amber-bg text-tone-amber-fg'}`}>
+        <div className={`mt-4 p-3 rounded-md text-meta ${newest ? 'bg-subtle text-fg-muted' : 'bg-tone-amber-bg text-tone-amber-fg'}`}>
           {newest ? (
             <>
               Last backup <strong className="text-fg font-medium">{timeAgo(newest.createdAt)}</strong>. Files are stored on the server in{' '}
@@ -203,7 +203,7 @@ export const AdminView: React.FC = () => {
           )
         )}
 
-        <div className="mt-6 text-[13px] text-fg-muted">
+        <div className="mt-6 text-meta text-fg-muted">
           <h3 className="text-sm font-medium text-fg mb-1">Restoring a backup</h3>
           Restoring replaces all current data, so it's done on the server: stop HandleMyDesk, run <code className="font-mono text-fg">npm run restore -- &lt;file name&gt;</code>,
           then start it again. The current data is saved first, just in case. See SETUP.md.

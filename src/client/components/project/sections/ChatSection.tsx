@@ -68,7 +68,7 @@ export const ChatSection: React.FC = () => {
       <div ref={scrollRef} role="log" aria-live="polite" aria-label="Chat messages" className="flex-1 overflow-y-auto px-4 sm:px-5 py-4">
         {chatHasMore && (
           <div className="flex justify-center mb-3">
-            <button onClick={showOlder} disabled={loadingOlder} className="h-7 px-3 rounded-full border border-line text-[13px] text-fg-muted hover:text-fg hover:bg-hover disabled:opacity-50">
+            <button onClick={showOlder} disabled={loadingOlder} className="h-7 px-3 rounded-full border border-line text-meta text-fg-muted hover:text-fg hover:bg-hover disabled:opacity-50">
               {loadingOlder ? 'Loading…' : 'Load earlier messages'}
             </button>
           </div>

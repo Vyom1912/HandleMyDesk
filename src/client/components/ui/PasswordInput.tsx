@@ -98,7 +98,7 @@ export const PasswordInput: React.FC<{
   return (
     <div className={className}>
       <div className="flex items-baseline justify-between gap-2 mb-1">
-        <label htmlFor={id} className="block text-[13px] font-medium text-fg-muted">
+        <label htmlFor={id} className="block text-meta font-medium text-fg-muted">
           {label}
           {required && (
             <span className="text-danger" aria-hidden="true">
@@ -114,7 +114,7 @@ export const PasswordInput: React.FC<{
               onChange(suggestPassword());
               setVisible(true);
             }}
-            className="inline-flex items-center gap-1 text-[13px] text-accent hover:underline underline-offset-2"
+            className="inline-flex items-center gap-1 text-meta text-accent hover:underline underline-offset-2"
           >
             <Sparkles size={13} aria-hidden="true" /> Suggest a strong one
           </button>

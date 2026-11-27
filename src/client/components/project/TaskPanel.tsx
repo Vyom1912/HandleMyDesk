@@ -15,7 +15,7 @@ const propSelect =
 
 const Row: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
   <div className="grid grid-cols-[110px_minmax(0,1fr)] items-center gap-2 min-h-9">
-    <span className="text-[13px] text-fg-faint">{label}</span>
+    <span className="text-meta text-fg-faint">{label}</span>
     <div className="min-w-0">{children}</div>
   </div>
 );
@@ -304,11 +304,11 @@ export const TaskPanel: React.FC<{ taskId: string; onClose: () => void }> = ({ t
         className="fixed inset-y-0 right-0 z-40 w-full sm:w-[580px] bg-surface border-l border-line shadow-[0_0_40px_rgb(0_0_0/0.12)] flex flex-col animate-fade-in focus:outline-none"
       >
         <div className="h-12 shrink-0 px-4 flex items-center justify-between gap-2 border-b border-line">
-          <span className="text-[13px] text-fg-faint truncate">
+          <span className="text-meta text-fg-faint truncate">
             <span className="font-mono">{project.code}</span> · Task
           </span>
           <div className="flex items-center gap-0.5">
-            <button onClick={copyLink} className="h-10 pointer-fine:h-7 px-2.5 pointer-fine:px-2 flex items-center gap-1.5 rounded-md text-[13px] text-fg-muted hover:bg-hover hover:text-fg">
+            <button onClick={copyLink} className="h-10 pointer-fine:h-7 px-2.5 pointer-fine:px-2 flex items-center gap-1.5 rounded-md text-meta text-fg-muted hover:bg-hover hover:text-fg">
               <LinkIcon size={14} /> Copy link
             </button>
             <IconButton
@@ -383,7 +383,7 @@ export const TaskPanel: React.FC<{ taskId: string; onClose: () => void }> = ({ t
             <Row label="Tags">
               <div className="flex flex-wrap items-center gap-1 py-1">
                 {task.tags.map((t) => (
-                  <span key={t} className="inline-flex items-center gap-0.5 h-6 pl-2 pr-0.5 rounded bg-tone-gray-bg text-[13px] text-tone-gray-fg">
+                  <span key={t} className="inline-flex items-center gap-0.5 h-6 pl-2 pr-0.5 rounded bg-tone-gray-bg text-meta text-tone-gray-fg">
                     {t}
                     <button onClick={() => patch({ tags: task.tags.filter((x) => x !== t) })} className="w-8 h-8 -my-1.5 -mr-1 pointer-fine:w-5 pointer-fine:h-5 pointer-fine:my-0 pointer-fine:mr-0 flex items-center justify-center rounded hover:bg-selected" aria-label={`Remove tag ${t}`}>
                       <X size={11} />
@@ -402,18 +402,18 @@ export const TaskPanel: React.FC<{ taskId: string; onClose: () => void }> = ({ t
                   onBlur={addTag}
                   placeholder={task.tags.length ? 'Add…' : 'Add a tag'}
                   aria-label="Add a tag"
-                  className="h-10 pointer-fine:h-6 w-28 px-1 bg-transparent text-base pointer-fine:text-[13px] text-fg placeholder:text-fg-faint focus:outline-none"
+                  className="h-10 pointer-fine:h-6 w-28 px-1 bg-transparent text-base pointer-fine:text-meta text-fg placeholder:text-fg-faint focus:outline-none"
                 />
               </div>
             </Row>
             <Row label="Created">
-              <span className="text-[13px] text-fg-muted">{formatDate(task.createdAt)}</span>
+              <span className="text-meta text-fg-muted">{formatDate(task.createdAt)}</span>
             </Row>
           </div>
 
           <section aria-labelledby="desc-heading">
             <div className="flex items-center justify-between mb-1.5">
-              <h3 id="desc-heading" className="text-[13px] font-medium text-fg-muted">
+              <h3 id="desc-heading" className="text-meta font-medium text-fg-muted">
                 Description
               </h3>
               {!editingDescription && (
@@ -422,7 +422,7 @@ export const TaskPanel: React.FC<{ taskId: string; onClose: () => void }> = ({ t
                     setDescription(task.description);
                     setEditingDescription(true);
                   }}
-                  className="h-10 pointer-fine:h-7 px-2.5 pointer-fine:px-2 flex items-center gap-1.5 rounded-md text-[13px] text-fg-muted hover:bg-hover hover:text-fg"
+                  className="h-10 pointer-fine:h-7 px-2.5 pointer-fine:px-2 flex items-center gap-1.5 rounded-md text-meta text-fg-muted hover:bg-hover hover:text-fg"
                 >
                   <Pencil size={13} /> Edit
                 </button>
@@ -441,7 +441,7 @@ export const TaskPanel: React.FC<{ taskId: string; onClose: () => void }> = ({ t
                       setEditingDescription(false);
                     }
                   }}
-                  className={`${textareaClass} font-mono text-[13px]`}
+                  className={`${textareaClass} font-mono text-meta`}
                   placeholder="Details, acceptance criteria, links… Markdown supported."
                   aria-label="Description"
                 />
@@ -468,7 +468,7 @@ export const TaskPanel: React.FC<{ taskId: string; onClose: () => void }> = ({ t
           </section>
 
           <section aria-labelledby="checklist-heading">
-            <h3 id="checklist-heading" className="text-[13px] font-medium text-fg-muted mb-1.5">
+            <h3 id="checklist-heading" className="text-meta font-medium text-fg-muted mb-1.5">
               Checklist {task.subtasks.length > 0 && <span className="text-fg-faint font-normal">{doneItems}/{task.subtasks.length}</span>}
             </h3>
             {task.subtasks.length > 0 && (
@@ -493,7 +493,7 @@ export const TaskPanel: React.FC<{ taskId: string; onClose: () => void }> = ({ t
                     label={`Remove “${s.title}”`}
                     danger
                     onClick={() => patch({ subtasks: task.subtasks.filter((x) => x.id !== s.id) })}
-                    className="opacity-0 group-hover:opacity-100 focus:opacity-100"
+                    className="hover-reveal"
                   >
                     <X size={13} />
                   </IconButton>
@@ -514,7 +514,7 @@ export const TaskPanel: React.FC<{ taskId: string; onClose: () => void }> = ({ t
           </section>
 
           <section aria-labelledby="comments-heading" className="pt-5 border-t border-line">
-            <h3 id="comments-heading" className="text-[13px] font-medium text-fg-muted mb-3">
+            <h3 id="comments-heading" className="text-meta font-medium text-fg-muted mb-3">
               Comments {comments.length > 0 && <span className="text-fg-faint font-normal">{comments.length}</span>}
             </h3>
             <ul className="space-y-4 mb-4">
@@ -531,7 +531,7 @@ export const TaskPanel: React.FC<{ taskId: string; onClose: () => void }> = ({ t
                           {c.editedAt && ' · edited'}
                         </time>
                         {(mine || canManage) && editingComment !== c.id && (
-                          <span className="ml-auto flex gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100">
+                          <span className="ml-auto flex gap-0.5 hover-reveal">
                             {mine && (
                               <IconButton label="Edit comment" onClick={() => setEditingComment(c.id)}>
                                 <Pencil size={13} />

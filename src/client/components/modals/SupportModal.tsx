@@ -144,7 +144,7 @@ export const SupportModal: React.FC = () => {
         </form>
       ) : selected ? (
         <div className="space-y-3">
-          <button onClick={() => setView('list')} className="flex items-center gap-1 text-[13px] text-fg-muted hover:text-fg">
+          <button onClick={() => setView('list')} className="flex items-center gap-1 text-meta text-fg-muted hover:text-fg">
             <ArrowLeft size={14} /> Your reports
           </button>
           <div className="flex items-center gap-2">
@@ -155,7 +155,7 @@ export const SupportModal: React.FC = () => {
             {selected.messages.map((m) => (
               <li key={m.id} className={`max-w-[85%] ${m.from === 'customer' ? 'ml-auto' : ''}`}>
                 <div className={`px-3 py-2 rounded-lg text-sm whitespace-pre-wrap break-words ${m.from === 'customer' ? 'bg-accent-soft' : 'bg-subtle'}`}>{m.text}</div>
-                <div className={`text-[11px] text-fg-faint mt-0.5 ${m.from === 'customer' ? 'text-right' : ''}`}>
+                <div className={`text-tiny text-fg-faint mt-0.5 ${m.from === 'customer' ? 'text-right' : ''}`}>
                   {m.from === 'customer' ? 'You' : m.name} · {formatDateTime(m.at)}
                 </div>
               </li>

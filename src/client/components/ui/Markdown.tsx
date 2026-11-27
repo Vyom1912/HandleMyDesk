@@ -72,7 +72,7 @@ export const Markdown: React.FC<{ source: string; className?: string }> = ({ sou
       while (i < lines.length && !lines[i].startsWith('```')) body.push(lines[i++]);
       i++;
       blocks.push(
-        <pre key={key} className="my-3 p-3 rounded-md bg-subtle border border-line font-mono text-[13px] overflow-x-auto whitespace-pre">
+        <pre key={key} className="my-3 p-3 rounded-md bg-subtle border border-line font-mono text-meta overflow-x-auto whitespace-pre">
           {body.join('\n')}
         </pre>
       );
@@ -153,5 +153,5 @@ export const Markdown: React.FC<{ source: string; className?: string }> = ({ sou
     );
   }
 
-  return <div className={`text-[15px] leading-relaxed text-fg break-words ${className}`}>{blocks}</div>;
+  return <div className={`text-body leading-relaxed text-fg break-words ${className}`}>{blocks}</div>;
 };

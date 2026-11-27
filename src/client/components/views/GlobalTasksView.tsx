@@ -115,7 +115,7 @@ export const GlobalTasksView: React.FC = () => {
         <div className="space-y-8">
           {groups.map((g) => (
             <section key={g.name} aria-labelledby={`bucket-${g.name}`}>
-              <h2 id={`bucket-${g.name}`} className={`text-[13px] font-medium mb-1.5 ${g.name === 'Overdue' ? 'text-tone-red-fg' : 'text-fg-muted'}`}>
+              <h2 id={`bucket-${g.name}`} className={`text-meta font-medium mb-1.5 ${g.name === 'Overdue' ? 'text-tone-red-fg' : 'text-fg-muted'}`}>
                 {g.name} <span className="text-fg-faint font-normal">{g.items.length}</span>
               </h2>
               <ul className="border border-line rounded-lg divide-y divide-line">
@@ -133,7 +133,7 @@ export const GlobalTasksView: React.FC = () => {
                       <StatusBadge status={task.status} />
                     </span>
                     {filter === 'all' && <Avatar src={task.assigneeAvatar} name={task.assigneeName} size={20} />}
-                    <span className={`text-[13px] tabular-nums w-14 text-right shrink-0 ${isOverdue(task.dueDate, task.status === 'done') ? 'text-tone-red-fg' : 'text-fg-muted'}`}>{formatDate(task.dueDate)}</span>
+                    <span className={`text-meta tabular-nums w-14 text-right shrink-0 ${isOverdue(task.dueDate, task.status === 'done') ? 'text-tone-red-fg' : 'text-fg-muted'}`}>{formatDate(task.dueDate)}</span>
                     <span className="hidden sm:block shrink-0 w-16">
                       <PriorityBadge priority={task.priority} />
                     </span>

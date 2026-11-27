@@ -148,11 +148,11 @@ export const Modal: React.FC<ModalProps> = ({ open, onClose, title, description,
       >
         <div className="flex items-start justify-between gap-3 px-5 pt-4 pb-3">
           <div className="min-w-0">
-            <h2 id={titleId} className="text-[15px] font-semibold text-fg">
+            <h2 id={titleId} className="text-body font-semibold text-fg">
               {title}
             </h2>
             {description && (
-              <p id={descId} className="text-[13px] text-fg-muted mt-0.5">
+              <p id={descId} className="text-meta text-fg-muted mt-0.5">
                 {description}
               </p>
             )}

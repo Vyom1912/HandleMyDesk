@@ -150,7 +150,7 @@ export const ClientsView: React.FC = () => {
                     </div>
                   </div>
                   <div className="hidden lg:block min-w-0">
-                    <div className="text-[13px] text-fg truncate">{client.contactPerson}</div>
+                    <div className="text-meta text-fg truncate">{client.contactPerson}</div>
                     {client.email && (
                       <a href={`mailto:${client.email}`} className="block text-xs text-fg-faint truncate hover:text-accent-ink hover:underline underline-offset-2">
                         {client.email}
@@ -160,7 +160,7 @@ export const ClientsView: React.FC = () => {
                   <span className="justify-self-end lg:justify-self-start">
                     <StatusBadge status={client.status} />
                   </span>
-                  <div className="hidden lg:block min-w-0 text-[13px] text-fg-muted truncate">
+                  <div className="hidden lg:block min-w-0 text-meta text-fg-muted truncate">
                     {clientProjects.length === 0
                       ? <span className="text-fg-faint">None</span>
                       : clientProjects.slice(0, 2).map((p, i) => (
@@ -173,10 +173,10 @@ export const ClientsView: React.FC = () => {
                         ))}
                     {clientProjects.length > 2 && <span className="text-fg-faint"> +{clientProjects.length - 2}</span>}
                   </div>
-                  <span className="hidden lg:block text-[13px] text-fg tabular-nums text-right">${client.totalBilled.toLocaleString()}</span>
+                  <span className="hidden lg:block text-meta text-fg tabular-nums text-right">${client.totalBilled.toLocaleString()}</span>
                   <span className="hidden lg:block">
                     {canEdit && (
-                      <IconButton label={`Edit ${client.name}`} onClick={() => openEditor(client)} className="opacity-0 group-hover:opacity-100 focus:opacity-100">
+                      <IconButton label={`Edit ${client.name}`} onClick={() => openEditor(client)} className="hover-reveal">
                         <Pencil size={14} />
                       </IconButton>
                     )}

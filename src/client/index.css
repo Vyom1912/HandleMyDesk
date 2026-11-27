@@ -42,6 +42,43 @@
   --color-tone-red-fg: var(--tone-red-fg);
 }
 
+/*
+ * Extra text sizes between Tailwind's steps (as variables, so phones can enlarge them below):
+ * text-micro 10px · text-tiny 11px · text-meta 13px · text-body 15px
+ */
+@theme {
+  --text-micro: 0.625rem;
+  --text-micro--line-height: 1.4;
+  --text-tiny: 0.6875rem;
+  --text-tiny--line-height: 1.45;
+  --text-meta: 0.8125rem;
+  --text-meta--line-height: 1.5;
+  --text-body: 0.9375rem;
+  --text-body--line-height: 1.5;
+}
+
+/*
+ * Phones and tablets: buttons and fields are already 44 px tall for fingers, so the text and icons
+ * inside them step up too (about one size), to stay readable and in proportion. Desktop is unchanged.
+ */
+@media (pointer: coarse) {
+  :root {
+    --text-micro: 0.6875rem; /* 11px */
+    --text-tiny: 0.75rem; /* 12px */
+    --text-xs: 0.8125rem; /* 13px */
+    --text-meta: 0.875rem; /* 14px */
+    --text-sm: 0.9375rem; /* 15px */
+    --text-body: 1rem; /* 16px */
+  }
+  body {
+    font-size: 15px;
+  }
+  /* Icons (lucide) grow with the text */
+  svg.lucide {
+    zoom: 1.15;
+  }
+}
+
 :root,
 :root[data-theme="light"] {
   color-scheme: light;
@@ -210,6 +247,22 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 }
 .animate-fade-in {
   animation: fadeIn 0.14s ease-out;
+}
+
+/*
+ * Row actions (edit, delete, remove…) that appear when the mouse is over the row. Phones and
+ * tablets have no hover, so there they are always visible.
+ */
+@media (hover: hover) and (pointer: fine) {
+  .hover-reveal {
+    opacity: 0;
+    transition: opacity 0.1s;
+  }
+  .group:hover .hover-reveal,
+  .hover-reveal:focus,
+  .hover-reveal:focus-within {
+    opacity: 1;
+  }
 }
 
 /* Grey placeholder shapes while something loads */

@@ -94,7 +94,7 @@ export const FilesSection: React.FC = () => {
           ))}
         </select>
         <div className="ml-auto flex items-center gap-2">
-          <label className="text-[13px] text-fg-muted" htmlFor="upload-category">
+          <label className="text-meta text-fg-muted" htmlFor="upload-category">
             Upload as
           </label>
           <select id="upload-category" value={category} onChange={(e) => setCategory(e.target.value as ProjectFile['category'])} className={toolbarSelectClass}>
@@ -112,7 +112,7 @@ export const FilesSection: React.FC = () => {
       </div>
 
       <div
-        className={`rounded-lg border border-dashed px-4 py-3 text-[13px] text-center transition-colors ${
+        className={`rounded-lg border border-dashed px-4 py-3 text-meta text-center transition-colors ${
           dragOver ? 'border-accent bg-accent-soft text-accent-ink' : 'border-line-strong text-fg-faint'
         }`}
       >
@@ -142,7 +142,7 @@ export const FilesSection: React.FC = () => {
                       <button
                         onClick={() => hasContent && download(file)}
                         disabled={!hasContent}
-                        className="block py-2.5 -my-2.5 pointer-fine:py-0 pointer-fine:my-0 text-[15px] pointer-fine:text-sm text-fg truncate max-w-full text-left enabled:hover:underline underline-offset-2 disabled:cursor-default"
+                        className="block py-2.5 -my-2.5 pointer-fine:py-0 pointer-fine:my-0 text-body pointer-fine:text-sm text-fg truncate max-w-full text-left enabled:hover:underline underline-offset-2 disabled:cursor-default"
                         title={hasContent ? `Download ${file.name}` : 'Sample entry: no stored file'}
                       >
                         {file.name}
@@ -152,9 +152,9 @@ export const FilesSection: React.FC = () => {
                       </div>
                     </div>
                   </div>
-                  <span className="hidden md:block text-[13px] text-fg-muted">{label(file.category)}</span>
-                  <span className="hidden md:block text-[13px] text-fg-muted tabular-nums">{file.fileSize}</span>
-                  <span className="hidden md:block text-[13px] text-fg-muted truncate">
+                  <span className="hidden md:block text-meta text-fg-muted">{label(file.category)}</span>
+                  <span className="hidden md:block text-meta text-fg-muted tabular-nums">{file.fileSize}</span>
+                  <span className="hidden md:block text-meta text-fg-muted truncate">
                     {formatDate(file.uploadedAt)} · {file.uploadedBy.split(' ')[0]}
                     {!hasContent && <span className="text-fg-faint"> · sample</span>}
                   </span>
@@ -163,7 +163,7 @@ export const FilesSection: React.FC = () => {
                       <Download size={14} />
                     </IconButton>
                     {canDelete && (
-                      <IconButton label={`Delete ${file.name}`} danger onClick={() => remove(file)} className="md:opacity-0 md:group-hover:opacity-100 focus:opacity-100">
+                      <IconButton label={`Delete ${file.name}`} danger onClick={() => remove(file)} className="hover-reveal">
                         <Trash2 size={14} />
                       </IconButton>
                     )}

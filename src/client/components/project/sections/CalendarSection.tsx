@@ -130,7 +130,7 @@ export const CalendarSection: React.FC = () => {
                   {inMonth && (
                     <button
                       onClick={() => openTaskEditor(undefined, { dueDate: key })}
-                      className="opacity-0 group-hover:opacity-100 focus:opacity-100 w-8 h-8 pointer-fine:w-5 pointer-fine:h-5 flex items-center justify-center rounded text-fg-faint hover:text-fg hover:bg-hover"
+                      className="hover-reveal w-8 h-8 pointer-fine:w-5 pointer-fine:h-5 flex items-center justify-center rounded text-fg-faint hover:text-fg hover:bg-hover"
                       aria-label={`Add task due ${d.toLocaleDateString()}`}
                     >
                       <Plus size={12} />
@@ -154,7 +154,7 @@ export const CalendarSection: React.FC = () => {
           .filter((d) => itemsByDate.has(iso(d)))
           .map((d) => (
             <li key={iso(d)}>
-              <div className={`text-[13px] font-medium mb-1.5 ${iso(d) === todayIso ? 'text-accent-ink' : 'text-fg-muted'}`}>
+              <div className={`text-meta font-medium mb-1.5 ${iso(d) === todayIso ? 'text-accent-ink' : 'text-fg-muted'}`}>
                 {d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
               </div>
               <div className="space-y-1">{itemsByDate.get(iso(d))!.map((item, i) => renderItem(item, i, false))}</div>

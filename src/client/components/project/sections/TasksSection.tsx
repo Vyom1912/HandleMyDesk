@@ -118,7 +118,7 @@ export const TasksSection: React.FC = () => {
                   <div className="flex items-center gap-3 min-w-0">
                     <TaskCheckbox task={task} onToggle={() => updateTask(task, { status: task.status === 'done' ? 'todo' : 'done' })} />
                     <div className="min-w-0">
-                      <button onClick={() => openTaskEditor(task)} className={`block py-2.5 -my-2.5 pointer-fine:py-0 pointer-fine:my-0 text-[15px] pointer-fine:text-sm text-left truncate max-w-full hover:underline underline-offset-2 ${task.status === 'done' ? 'line-through text-fg-faint' : 'text-fg'}`}>
+                      <button onClick={() => openTaskEditor(task)} className={`block py-2.5 -my-2.5 pointer-fine:py-0 pointer-fine:my-0 text-body pointer-fine:text-sm text-left truncate max-w-full hover:underline underline-offset-2 ${task.status === 'done' ? 'line-through text-fg-faint' : 'text-fg'}`}>
                         {task.title}
                       </button>
                       {(task.subtasks.length > 0 || task.tags.length > 0) && (
@@ -140,7 +140,7 @@ export const TasksSection: React.FC = () => {
                     aria-label={`Status of ${task.title}`}
                     value={task.status}
                     onChange={(e) => updateTask(task, { status: e.target.value as Task['status'] })}
-                    className="h-10 pointer-fine:h-7 pl-1.5 pr-6 bg-transparent border border-transparent hover:border-line rounded text-base pointer-fine:text-[13px] text-fg-muted focus:outline-none focus:border-accent justify-self-end md:justify-self-stretch"
+                    className="h-10 pointer-fine:h-7 pl-1.5 pr-6 bg-transparent border border-transparent hover:border-line rounded text-base pointer-fine:text-meta text-fg-muted focus:outline-none focus:border-accent justify-self-end md:justify-self-stretch"
                   >
                     {TASK_STATUS_OPTIONS.map((s) => (
                       <option key={s.value} value={s.value}>
@@ -148,16 +148,16 @@ export const TasksSection: React.FC = () => {
                       </option>
                     ))}
                   </select>
-                  <div className="flex items-center gap-1.5 min-w-0 text-[13px] text-fg-muted col-start-1 md:col-start-auto pl-7 md:pl-0">
+                  <div className="flex items-center gap-1.5 min-w-0 text-meta text-fg-muted col-start-1 md:col-start-auto pl-7 md:pl-0">
                     <Avatar src={task.assigneeAvatar} name={task.assigneeName} size={18} />
                     <span className="truncate">{task.assigneeName}</span>
                   </div>
-                  <span className={`text-[13px] tabular-nums ${overdue ? 'text-tone-red-fg' : 'text-fg-muted'} justify-self-end md:justify-self-start`}>{formatDate(task.dueDate)}</span>
+                  <span className={`text-meta tabular-nums ${overdue ? 'text-tone-red-fg' : 'text-fg-muted'} justify-self-end md:justify-self-start`}>{formatDate(task.dueDate)}</span>
                   <span className="hidden md:block">
                     <PriorityBadge priority={task.priority} />
                   </span>
                   <span className="hidden md:block">
-                    <IconButton label={`Delete ${task.title}`} danger onClick={() => deleteTask(task)} className="opacity-0 group-hover:opacity-100 focus:opacity-100">
+                    <IconButton label={`Delete ${task.title}`} danger onClick={() => deleteTask(task)} className="hover-reveal">
                       <Trash2 size={14} />
                     </IconButton>
                   </span>

@@ -107,7 +107,7 @@ export const ShortcutsModal: React.FC = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-6">
         {SHORTCUT_GROUPS.map((g) => (
           <section key={g.title}>
-            <h3 className="text-[13px] font-medium text-fg-muted mb-2">{g.title}</h3>
+            <h3 className="text-meta font-medium text-fg-muted mb-2">{g.title}</h3>
             <ul className="space-y-2">
               {g.items.map((item) => (
                 <li key={item.label} className="flex items-center justify-between gap-3 text-sm text-fg">

@@ -147,7 +147,7 @@ export const LoginView: React.FC = () => {
                   HandleMyDesk if you are the administrator. They will give you a new password, usually by phone or message.
                 </p>
               )}
-              <Button className="w-full h-9" onClick={() => setForgot('closed')}>
+              <Button className="w-full h-11 pointer-fine:h-9" onClick={() => setForgot('closed')}>
                 Back to sign in
               </Button>
             </div>
@@ -163,7 +163,7 @@ export const LoginView: React.FC = () => {
               <Field label="Email">
                 <input type="email" inputMode="email" autoCapitalize="none" autoCorrect="off" autoComplete="username" required autoFocus value={email} onChange={(e) => setEmail(e.target.value)} className={inputClass} />
               </Field>
-              <Button type="submit" className="w-full h-9" disabled={submitting || !email.trim()}>
+              <Button type="submit" className="w-full h-11 pointer-fine:h-9" disabled={submitting || !email.trim()}>
                 {submitting ? 'Sending…' : 'Ask for a password reset'}
               </Button>
               <button type="button" onClick={() => setForgot('closed')} className="w-full text-sm text-fg-muted hover:text-fg">
@@ -190,7 +190,7 @@ export const LoginView: React.FC = () => {
           <>
             <a
               href="/api/auth/sso/start"
-              className="flex items-center justify-center w-full h-9 rounded-md border border-line-strong bg-surface hover:bg-hover text-sm font-medium text-fg"
+              className="flex items-center justify-center w-full h-11 pointer-fine:h-9 rounded-md border border-line-strong bg-surface hover:bg-hover text-sm font-medium text-fg"
             >
               Continue with {sso.label}
             </a>
@@ -212,7 +212,7 @@ export const LoginView: React.FC = () => {
           <Field label="Email">
             <input type="email" inputMode="email" autoCapitalize="none" autoCorrect="off" autoComplete="username" required autoFocus={!email} value={email} onChange={(e) => setEmail(e.target.value)} className={inputClass} placeholder="you@company.com" />
           </Field>
-          <label className="-mt-1 flex items-center gap-2 text-[13px] text-fg-muted cursor-pointer">
+          <label className="-mt-1 flex items-center gap-2 text-meta text-fg-muted cursor-pointer">
             <input type="checkbox" className="accent-accent" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
             Remember my email on this device
           </label>
@@ -224,7 +224,7 @@ export const LoginView: React.FC = () => {
                 setError(null);
                 setForgot('open');
               }}
-              className="text-[13px] text-fg-muted hover:text-fg hover:underline underline-offset-2"
+              className="text-meta text-fg-muted hover:text-fg hover:underline underline-offset-2"
             >
               Forgot password?
             </button>
@@ -233,13 +233,13 @@ export const LoginView: React.FC = () => {
             <div className="space-y-2" role="group" aria-label="Choose your office">
               <p className="text-sm text-fg-muted">You have accounts in more than one office. Which one do you want to open?</p>
               {offices.map((o) => (
-                <Button key={o.id} variant="secondary" className="w-full h-9 justify-start" disabled={submitting} onClick={() => signIn(o.id)}>
+                <Button key={o.id} variant="secondary" className="w-full h-11 pointer-fine:h-9 justify-start" disabled={submitting} onClick={() => signIn(o.id)}>
                   {o.name}
                 </Button>
               ))}
             </div>
           ) : (
-            <Button type="submit" className="w-full h-9" disabled={submitting || !email.trim() || !password}>
+            <Button type="submit" className="w-full h-11 pointer-fine:h-9" disabled={submitting || !email.trim() || !password}>
               {submitting ? 'Signing in…' : 'Continue'}
             </Button>
           )}
@@ -256,7 +256,7 @@ export const LoginView: React.FC = () => {
         )}
 
         {import.meta.env.DEV && (
-          <div className="mt-10 pt-5 border-t border-line text-[13px] text-fg-muted space-y-2.5">
+          <div className="mt-10 pt-5 border-t border-line text-meta text-fg-muted space-y-2.5">
             <p>
               Development accounts (password <code className="font-mono text-fg">handlemydesk123</code>):
             </p>

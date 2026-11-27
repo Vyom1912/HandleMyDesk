@@ -164,7 +164,7 @@ export const QuickProjectPickerModal: React.FC = () => {
             onKeyDown={handleKeyDown}
             className="w-full h-full bg-transparent text-base text-fg placeholder:text-fg-faint focus:outline-none"
           />
-          <kbd className="text-[11px] text-fg-faint border border-line rounded px-1.5 py-0.5 font-sans">Esc</kbd>
+          <kbd className="text-tiny text-fg-faint border border-line rounded px-1.5 py-0.5 font-sans">Esc</kbd>
         </div>
 
         <ul id="search-results" ref={listRef} role="listbox" className="max-h-[60vh] sm:max-h-[400px] overflow-y-auto p-1.5">

@@ -217,7 +217,7 @@ export const CreateProjectModal: React.FC = () => {
         </Field>
 
         <fieldset>
-          <legend className="block text-[13px] font-medium text-fg-muted mb-1">Team ({selectedTeam.length})</legend>
+          <legend className="block text-meta font-medium text-fg-muted mb-1">Team ({selectedTeam.length})</legend>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-px max-h-44 overflow-y-auto p-1 border border-line-strong rounded-md">
             {allEmployees.filter((emp) => emp.active !== false).map((emp) => {
               const isSelected = selectedTeam.includes(emp.id);

@@ -34,7 +34,7 @@ export const ConfirmDialog: React.FC = () => {
       <p className="text-sm text-fg-muted leading-relaxed">{message}</p>
       {requireText && (
         <label className="block mt-4">
-          <span className="block text-[13px] text-fg-muted mb-1">
+          <span className="block text-meta text-fg-muted mb-1">
             Type <strong className="font-mono text-fg">{requireText}</strong> to confirm
           </span>
           <input

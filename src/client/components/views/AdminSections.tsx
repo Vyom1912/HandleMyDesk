@@ -150,7 +150,7 @@ export const BrandingSection: React.FC = () => {
                   </button>
                 );
               })}
-              <label className="relative inline-flex items-center gap-1.5 h-9 pointer-fine:h-7 px-2.5 rounded-md border border-line-strong text-[13px] text-fg-muted hover:bg-hover cursor-pointer">
+              <label className="relative inline-flex items-center gap-1.5 h-9 pointer-fine:h-7 px-2.5 rounded-md border border-line-strong text-meta text-fg-muted hover:bg-hover cursor-pointer">
                 <span className="w-4 h-4 rounded-full border border-line-strong" style={{ background: current ?? 'conic-gradient(red, yellow, lime, cyan, blue, magenta, red)' }} aria-hidden="true" />
                 Custom…
                 <input
@@ -170,9 +170,9 @@ export const BrandingSection: React.FC = () => {
             </div>
             <div className="mt-3 flex flex-wrap items-center gap-2" aria-label="Preview">
               <span className="text-xs text-fg-faint">Preview:</span>
-              <span className="inline-flex items-center h-7 px-2.5 rounded-md bg-accent text-on-accent text-[13px] font-medium">Button</span>
-              <span className="inline-flex items-center h-7 px-2.5 rounded-md bg-accent-soft text-accent-ink text-[13px] font-medium">Selected</span>
-              <span className="text-[13px] text-accent-ink underline underline-offset-2">Link</span>
+              <span className="inline-flex items-center h-7 px-2.5 rounded-md bg-accent text-on-accent text-meta font-medium">Button</span>
+              <span className="inline-flex items-center h-7 px-2.5 rounded-md bg-accent-soft text-accent-ink text-meta font-medium">Selected</span>
+              <span className="text-meta text-accent-ink underline underline-offset-2">Link</span>
             </div>
           </div>
 
@@ -181,7 +181,7 @@ export const BrandingSection: React.FC = () => {
             <div className="text-sm font-medium text-fg">Your sign-in page</div>
             <p className="text-xs text-fg-faint mt-0.5">Share this link with your team. It opens the sign-in page with your logo and colour.</p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
-              <code className="flex-1 min-w-0 h-9 px-2.5 flex items-center rounded-md bg-subtle border border-line font-mono text-[13px] text-fg truncate">{signInLink}</code>
+              <code className="flex-1 min-w-0 h-9 px-2.5 flex items-center rounded-md bg-subtle border border-line font-mono text-meta text-fg truncate">{signInLink}</code>
               <Button variant="secondary" size="sm" onClick={() => copy(signInLink)}>
                 {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? 'Copied' : 'Copy link'}
               </Button>
@@ -258,7 +258,7 @@ export const ExportSection: React.FC = () => {
                 setFrom(p.days === null ? '' : isoDay(new Date(Date.now() - p.days * 86400000)));
                 setTo(p.days === null ? '' : today);
               }}
-              className="h-9 pointer-fine:h-7 px-2.5 rounded-md border border-line text-[13px] text-fg-muted hover:bg-hover hover:text-fg"
+              className="h-9 pointer-fine:h-7 px-2.5 rounded-md border border-line text-meta text-fg-muted hover:bg-hover hover:text-fg"
             >
               {p.label}
             </button>

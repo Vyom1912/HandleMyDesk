@@ -111,15 +111,15 @@ export const ProjectDirectoryView: React.FC = () => {
                       <span className="lg:hidden"> · {p.clientName}</span>
                     </span>
                   </button>
-                  <span className="hidden lg:block text-[13px] text-fg-muted truncate">{p.clientName}</span>
+                  <span className="hidden lg:block text-meta text-fg-muted truncate">{p.clientName}</span>
                   <span className="justify-self-end lg:justify-self-start">
                     <StatusBadge status={p.status} />
                   </span>
-                  <span className="hidden lg:flex items-center gap-1.5 min-w-0 text-[13px] text-fg-muted">
+                  <span className="hidden lg:flex items-center gap-1.5 min-w-0 text-meta text-fg-muted">
                     <Avatar src={p.leadAvatar} name={p.leadName} size={18} />
                     <span className="truncate">{p.leadName}</span>
                   </span>
-                  <span className={`hidden lg:block text-[13px] tabular-nums ${late ? 'text-tone-red-fg' : 'text-fg-muted'}`}>{formatDate(p.targetDate)}</span>
+                  <span className={`hidden lg:block text-meta tabular-nums ${late ? 'text-tone-red-fg' : 'text-fg-muted'}`}>{formatDate(p.targetDate)}</span>
                   <span className="hidden lg:flex items-center gap-2">
                     <span className="flex-1 h-1 rounded-full bg-hover overflow-hidden" aria-hidden="true">
                       <span className="block h-full bg-accent" style={{ width: `${p.completionPercentage}%` }} />
