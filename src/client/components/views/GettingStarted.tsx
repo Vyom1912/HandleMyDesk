@@ -18,6 +18,8 @@ export const GettingStarted: React.FC = () => {
 
   if (!currentUser || state.dismissed) return null;
 
+  // Phones and tablets: tips about tapping, not keyboard shortcuts
+  const touch = window.matchMedia('(pointer: coarse)').matches;
   const mine = projects.filter((p) => p.leadId === currentUser.id || p.teamMemberIds.includes(currentUser.id));
   const steps = [
     {
@@ -29,7 +31,7 @@ export const GettingStarted: React.FC = () => {
     {
       done: (workspace?.tabs.length ?? 0) > 0,
       label: 'Open one of your projects',
-      hint: 'Your projects are in the left sidebar; expand one to jump to its tasks, board or files.',
+      hint: touch ? 'Tap Projects at the bottom of the screen.' : 'Your projects are in the left sidebar; expand one to jump to its tasks, board or files.',
       action: () => (mine[0] ? openProject(mine[0].id, 'overview') : navigate({ view: 'projects' })),
     },
     ...(currentUser.role !== 'member'
@@ -55,27 +57,31 @@ export const GettingStarted: React.FC = () => {
     {
       done: !!state.search,
       label: 'Find anything with search',
-      hint: 'Press Ctrl K (or /) to search projects, tasks, notes, files and people.',
+      hint: touch ? 'Tap the magnifying glass at the top to search projects, tasks, notes, files and people.' : 'Press Ctrl K (or /) to search projects, tasks, notes, files and people.',
       action: () => setIsProjectPickerOpen(true),
     },
     {
       done: !!state.notifications,
       label: 'Choose what you are notified about',
-      hint: 'Inbox → the gear icon.',
+      hint: touch ? 'Alerts at the bottom → the gear icon. You can also get them on your phone there.' : 'Notifications → the gear icon.',
       action: () => setIsNotificationsOpen(true),
     },
-    {
-      done: !!state.shortcuts,
-      label: 'Learn the keyboard shortcuts',
-      hint: 'Press ? anywhere.',
-      action: () => setIsShortcutsOpen(true),
-    },
+    ...(touch
+      ? []
+      : [
+          {
+            done: !!state.shortcuts,
+            label: 'Learn the keyboard shortcuts',
+            hint: 'Press ? anywhere.',
+            action: () => setIsShortcutsOpen(true),
+          },
+        ]),
   ];
   const doneCount = steps.filter((s) => s.done).length;
   if (doneCount === steps.length) return null;
 
   return (
-    <section aria-labelledby="getting-started" className="mb-10 border border-line rounded-lg">
+    <section aria-labelledby="getting-started" className="mb-6 sm:mb-10 border border-line rounded-lg">
       <div className="flex items-center justify-between gap-3 px-4 pt-3.5 pb-2">
         <div>
           <h2 id="getting-started" className="text-sm font-semibold text-fg">

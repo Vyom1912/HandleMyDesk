@@ -95,8 +95,20 @@ export async function resyncPush(): Promise<void> {
     if (!supported() || Notification.permission !== 'granted') return;
     const config = await getConfig();
     if (!config.enabled) return;
-    const sub = await currentSubscription();
-    if (sub) await api.post('/api/push/subscribe', { subscription: sub.toJSON() });
+    let sub = await currentSubscription();
+    if (!sub) return;
+    // The server's keys changed (e.g. a new server): permission is already given, so quietly
+    // make a new subscription instead of leaving this phone without notifications
+    if (config.publicKey && sub.options.applicationServerKey) {
+      const current = new Uint8Array(sub.options.applicationServerKey);
+      const wanted = keyToBytes(config.publicKey);
+      if (current.length !== wanted.length || current.some((b, i) => b !== wanted[i])) {
+        await sub.unsubscribe();
+        const reg = await navigator.serviceWorker.ready;
+        sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: wanted });
+      }
+    }
+    await api.post('/api/push/subscribe', { subscription: sub.toJSON() });
   } catch {
     // Best effort
   }

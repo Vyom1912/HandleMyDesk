@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   Home,
   CheckSquare,
-  Inbox,
+  Bell,
   FolderKanban,
   Building2,
   Users,
@@ -296,10 +296,11 @@ export const Sidebar: React.FC = () => {
                 setMenuOpen(false);
                 setIsShortcutsOpen(true);
               }}
-              className={`${rowBase} ${rowIdle}`}
+              // Phones have no keyboard shortcuts
+              className={`${rowBase} ${rowIdle} touch-hidden`}
             >
               <Keyboard size={15} /> Keyboard shortcuts
-              <kbd className="ml-auto text-tiny text-fg-faint font-sans">?</kbd>
+              <kbd className="hidden pointer-fine:inline ml-auto text-tiny text-fg-faint font-sans">?</kbd>
             </button>
             <button
               role="menuitem"
@@ -323,11 +324,11 @@ export const Sidebar: React.FC = () => {
         <button onClick={() => setIsProjectPickerOpen(true)} className={`${rowBase} ${rowIdle}`}>
           <Search size={15} className="shrink-0" />
           <span className="flex-1">Search</span>
-          <kbd className="text-tiny text-fg-faint font-sans">Ctrl K</kbd>
+          <kbd className="hidden pointer-fine:inline text-tiny text-fg-faint font-sans">Ctrl K</kbd>
         </button>
         <button onClick={() => setIsNotificationsOpen(true)} className={`${rowBase} ${rowIdle}`}>
-          <Inbox size={15} className="shrink-0" />
-          <span className="flex-1">Inbox</span>
+          <Bell size={15} className="shrink-0" />
+          <span className="flex-1">Notifications</span>
           {notificationCount > 0 && (
             <span className="min-w-5 h-[18px] px-1.5 rounded-full bg-accent text-on-accent text-tiny font-semibold flex items-center justify-center" aria-label={`${notificationCount} unread`}>
               {notificationCount > 99 ? '99+' : notificationCount}

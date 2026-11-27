@@ -144,7 +144,7 @@ export const ChatSection: React.FC = () => {
             <ArrowUp size={15} />
           </button>
         </div>
-        <p className="text-xs text-fg-faint mt-1.5 px-1">Enter to send · Shift+Enter for a new line</p>
+        <p className="touch-hidden text-xs text-fg-faint mt-1.5 px-1">Enter to send · Shift+Enter for a new line</p>
       </form>
     </div>
   );

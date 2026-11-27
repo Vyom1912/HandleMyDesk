@@ -75,7 +75,7 @@ export const TasksSection: React.FC = () => {
         </select>
         <Button
           variant="secondary"
-          className="ml-auto"
+          className="ml-auto touch-hidden"
           onClick={() => downloadCsv(`/api/projects/${projectId}/export/tasks.csv`, `${project.code}-tasks`).catch((err) => showToast(err.message, 'error'))}
           title="All of this project's tasks, as a spreadsheet"
           aria-label="Export tasks as CSV"
@@ -83,7 +83,8 @@ export const TasksSection: React.FC = () => {
           <Download size={15} />
           <span className="hidden sm:inline">Export</span>
         </Button>
-        <Button onClick={() => openTaskEditor()}>
+        {/* Full width on phones, so it's easy to reach */}
+        <Button onClick={() => openTaskEditor()} className="w-full sm:w-auto">
           <Plus size={15} /> New task
         </Button>
       </div>
@@ -118,7 +119,7 @@ export const TasksSection: React.FC = () => {
                   <div className="flex items-center gap-3 min-w-0">
                     <TaskCheckbox task={task} onToggle={() => updateTask(task, { status: task.status === 'done' ? 'todo' : 'done' })} />
                     <div className="min-w-0">
-                      <button onClick={() => openTaskEditor(task)} className={`block py-2.5 -my-2.5 pointer-fine:py-0 pointer-fine:my-0 text-body pointer-fine:text-sm text-left truncate max-w-full hover:underline underline-offset-2 ${task.status === 'done' ? 'line-through text-fg-faint' : 'text-fg'}`}>
+                      <button onClick={() => openTaskEditor(task)} className={`line-clamp-2 md:block md:truncate py-1 -my-1 pointer-fine:py-0 pointer-fine:my-0 text-body pointer-fine:text-sm text-left max-w-full hover:underline underline-offset-2 ${task.status === 'done' ? 'line-through text-fg-faint' : 'text-fg'}`}>
                         {task.title}
                       </button>
                       {(task.subtasks.length > 0 || task.tags.length > 0) && (

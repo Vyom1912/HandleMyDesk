@@ -36,6 +36,7 @@ import { addStream, removeStream, emitToUsers, closeStreamsFor } from './events'
 import { requestLogger, logServerError, LoggedRequest } from './logging';
 import { toCsv, csvFileName } from './csv';
 import { cloudStatus, filesMayHaveChanged, startFileWatch } from './cloud';
+import { startKeepAwake, keepAwakeStatus } from './keepAwake';
 import { ssoRouter } from './sso';
 import { pushPublicKey, sendPush, addSubscription, removeSubscription, isValidSubscription } from './push';
 import { BUILT_IN_TEMPLATES, instantiateTemplate, templateFromProject } from './templates';
@@ -354,7 +355,7 @@ app.use('/api/projects/:id', (req: AuthenticatedRequest, res, next) => {
 
 // Lets people (and the dev tooling) confirm which server process is answering
 app.get('/api/health', (req, res) => {
-  res.json({ ok: true, pid: process.pid, uptimeSeconds: Math.round(process.uptime()), schemaVersion: db.schemaVersion(), cloud: cloudStatus() });
+  res.json({ ok: true, pid: process.pid, uptimeSeconds: Math.round(process.uptime()), schemaVersion: db.schemaVersion(), cloud: cloudStatus(), keepAwake: keepAwakeStatus() });
 });
 
 // ==========================================
@@ -2688,6 +2689,7 @@ if (process.env.NODE_ENV !== 'test') {
   requireOfficeContext();
 
   startFileWatch();
+  startKeepAwake();
   const server = app.listen(PORT, () => {
     console.log(`HandleMyDesk server running on port ${PORT} (process ${process.pid})`);
   });

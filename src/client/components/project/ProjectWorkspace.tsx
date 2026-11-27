@@ -21,6 +21,7 @@ import { StatusBadge, PriorityBadge } from '../ui/Badges';
 import { TopBar } from '../layout/PageShell';
 import { TaskEditorModal } from './TaskEditorModal';
 import { TaskPanel } from './TaskPanel';
+import { MobileSectionBar } from './MobileSectionBar';
 import { NEW_TASK_EVENT } from '../ui/Shortcuts';
 import { OverviewSection } from './sections/OverviewSection';
 import { TasksSection } from './sections/TasksSection';
@@ -314,13 +315,13 @@ export const ProjectWorkspace: React.FC<{ projectId: string }> = ({ projectId })
             <>
               <button
                 onClick={() => openProject(projectId, 'report')}
-                className="h-10 pointer-fine:h-7 px-2.5 pointer-fine:px-2 flex items-center gap-1.5 rounded-md text-meta text-fg-muted hover:bg-hover hover:text-fg"
+                className="hidden md:flex h-10 pointer-fine:h-7 px-2.5 pointer-fine:px-2 flex items-center gap-1.5 rounded-md text-meta text-fg-muted hover:bg-hover hover:text-fg"
                 title="A printable summary to share with the client"
               >
                 <FileText size={14} />
                 <span className="hidden sm:inline">Client summary</span>
               </button>
-              <button onClick={copyLink} className="h-10 pointer-fine:h-7 px-2.5 pointer-fine:px-2 flex items-center gap-1.5 rounded-md text-meta text-fg-muted hover:bg-hover hover:text-fg" title="Copy a link to this page">
+              <button onClick={copyLink} className="hidden md:flex h-10 pointer-fine:h-7 px-2.5 pointer-fine:px-2 flex items-center gap-1.5 rounded-md text-meta text-fg-muted hover:bg-hover hover:text-fg" title="Copy a link to this page">
                 <LinkIcon size={14} />
                 <span className="hidden sm:inline">Copy link</span>
               </button>
@@ -346,15 +347,18 @@ export const ProjectWorkspace: React.FC<{ projectId: string }> = ({ projectId })
               <span>{project.clientName}</span>
             </div>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-              <h1 className="text-2xl sm:text-[28px] leading-tight font-semibold tracking-tight text-fg">{project.name}</h1>
+              <h1 className="text-xl sm:text-[28px] leading-tight font-semibold tracking-tight text-fg">{project.name}</h1>
               <div className="flex items-center gap-1.5">
                 <StatusBadge status={project.status} />
                 <PriorityBadge priority={project.priority} />
               </div>
             </div>
 
-            {/* Section tabs */}
-            <div className="mt-5 -mx-1 border-b border-line">
+            {/* Section tabs: a short bar with "More" on phones, the full row from tablet width */}
+            <div className="mt-4 sm:mt-5">
+              <MobileSectionBar sections={sections} active={activeSection} onOpen={(id) => openProject(projectId, id)} onCopyLink={copyLink} />
+            </div>
+            <div className="hidden md:block mt-0 -mx-1 border-b border-line">
               <nav aria-label="Project sections" className="flex items-center overflow-x-auto no-scrollbar">
                 {sections.map((s) => {
                   const active = activeSection === s.id;
@@ -379,7 +383,7 @@ export const ProjectWorkspace: React.FC<{ projectId: string }> = ({ projectId })
             </div>
           </div>
 
-          <div className="mx-auto px-4 sm:px-8 lg:px-12 py-6 max-w-6xl">
+          <div className="mx-auto px-4 sm:px-8 lg:px-12 py-4 sm:py-6 max-w-6xl">
             <Section />
           </div>
         </div>

@@ -220,12 +220,17 @@ Company sign-in (SSO) works for the first office only in this version.
 
 ## Phone notifications
 
-1. On your computer, run `npx web-push generate-vapid-keys`. It prints a Public Key and a Private Key.
-2. On Render → your service → **Environment**, add `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY` with those
-   two values, then save. Never change them later: everyone's phones would stop getting alerts until
-   they turn alerts on again.
-3. Each person: open the app → bell icon → ⚙ settings → **Turn on for this device**.
-   On iPhone/iPad this only works after **Share → Add to Home Screen**, opening the app from that icon.
+Nothing to set up on the server: it makes its own notification keys and keeps them with the data
+(in Neon when `DATABASE_URL` is set, so they survive restarts). If you prefer fixed keys, run
+`npx web-push generate-vapid-keys` and set `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY` on Render.
+
+Each person, once per phone:
+- **Android:** open the app → the blue **Get notifications on this phone** card on Home (or **Alerts**)
+  → **Turn on** → Allow. **Install app** puts HandleMyDesk on the home screen.
+- **iPhone/iPad:** in Safari tap **Share → Add to Home Screen**, open HandleMyDesk from the new icon,
+  then **Turn on** in the same card. (Apple only allows notifications for installed web apps.)
+
+The unread count also shows on the app icon.
 
 ## Keeping data on the free plan (Neon)
 
@@ -255,10 +260,18 @@ Good to know:
 
 ## Keeping the free server awake
 
-`.github/workflows/keep-awake.yml` visits the server every 10 minutes so Render's free plan doesn't
-put it to sleep. You can see the runs under the repo's **Actions** tab. GitHub pauses scheduled jobs
-in a repo with no commits for 60 days; push anything (or click **Enable workflow**) to restart it.
-Delete the file if you move to a paid Render plan.
+Render's free plan stops the server after 15 minutes without visitors; waking it takes up to a minute.
+Two things prevent that, with nothing to set up:
+
+1. **The server visits itself** every 10 minutes at its public address (Render provides it as
+   `RENDER_EXTERNAL_URL`). Check `/api/health`: `"keepAwake": {"lastOkAt": "…"}` shows the last visit.
+2. **Backup:** `.github/workflows/keep-awake.yml` also visits every 10 minutes from GitHub (often late,
+   which is why it isn't enough alone). See the runs under the repo's **Actions** tab.
+
+Good to know:
+- A free Render account gets 750 running hours a month: enough for **one** server awake all month.
+- After a deploy, the server still restarts once (1–2 minutes); that can't be avoided on the free plan.
+- On a paid plan the server never sleeps: set `KEEP_AWAKE=false` and delete the workflow file.
 
 ## Backups
 

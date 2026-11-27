@@ -71,7 +71,7 @@ const StageTracker: React.FC = () => {
 
   return (
     <section aria-label="Project stage">
-      <ol className="grid grid-cols-4 gap-1.5">
+      <ol className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
         {STAGES.map((s, i) => {
           const state = i < current ? 'done' : i === current ? 'current' : 'next';
           return (
@@ -100,7 +100,7 @@ const StageTracker: React.FC = () => {
           );
         })}
       </ol>
-      {canManage && <p className="text-xs text-fg-faint mt-1.5">Click a step to move the project. The team is notified.</p>}
+      {canManage && <p className="text-xs text-fg-faint mt-1.5">Tap a step to move the project. The team is notified.</p>}
     </section>
   );
 };

@@ -78,6 +78,18 @@ const SupportVisitBanner: React.FC = () => {
 export const App: React.FC = () => {
   const { authStatus, mustChangePassword, route, setIsProjectPickerOpen, sidebarCollapsed, setSidebarCollapsed, loading, error, retryLoad, logout } = useApp();
 
+  // Unread count on the home-screen icon (installed app on Android, and iPhone from iOS 16.4)
+  const { notificationCount } = useApp();
+  useEffect(() => {
+    const nav = navigator as Navigator & { setAppBadge?: (n?: number) => Promise<void>; clearAppBadge?: () => Promise<void> };
+    if (authStatus !== 'signed_in') {
+      nav.clearAppBadge?.().catch(() => {});
+      return;
+    }
+    if (notificationCount > 0) nav.setAppBadge?.(notificationCount).catch(() => {});
+    else nav.clearAppBadge?.().catch(() => {});
+  }, [notificationCount, authStatus]);
+
   useKeyboardShortcuts();
 
   if (authStatus === 'signed_out') {

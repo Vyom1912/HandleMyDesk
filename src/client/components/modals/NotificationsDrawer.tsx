@@ -9,6 +9,7 @@ import { DOT, timeAgo } from '../ui/Badges';
 import { Segmented, toolbarSelectClass, Button } from '../ui/Field';
 import { getPushState, turnOnPush, turnOffPush, PushState } from '../../services/push';
 import { openSupport } from '../../services/office';
+import { PhoneAlertsCard } from '../ui/PhoneAlerts';
 
 const TYPE_DOT: Record<NotificationItem['type'], string> = {
   success: DOT.green,
@@ -105,11 +106,11 @@ const Preferences: React.FC<{ onBack: () => void }> = ({ onBack }) => {
   return (
     <div className="flex-1 overflow-y-auto px-4 py-4">
       <button onClick={onBack} className="flex items-center gap-1.5 h-10 pointer-fine:h-7 px-1.5 -ml-1.5 rounded-md text-meta text-fg-muted hover:text-fg hover:bg-hover mb-3">
-        <ArrowLeft size={14} /> Back to inbox
+        <ArrowLeft size={14} /> Back to notifications
       </button>
       <DeviceAlerts />
       <h3 className="text-sm font-semibold text-fg">Notify me about</h3>
-      <p className="text-meta text-fg-muted mt-0.5 mb-3">Turned-off kinds won't appear in your inbox. Changes save straight away.</p>
+      <p className="text-meta text-fg-muted mt-0.5 mb-3">Turned-off kinds won't appear in your notifications. Changes save straight away.</p>
       {!muted ? (
         <p className="text-sm text-fg-muted" role="status">
           Loading…
@@ -184,7 +185,7 @@ export const NotificationsDrawer: React.FC = () => {
       <div ref={ref} role="dialog" aria-modal="true" aria-labelledby="inbox-title" tabIndex={-1} className="focus:outline-none bg-surface sm:border-l border-line w-full sm:max-w-sm h-full flex flex-col shadow-[0_0_40px_rgb(0_0_0/0.12)]">
         <div className="h-12 px-4 border-b border-line flex items-center justify-between gap-2">
           <h2 id="inbox-title" className="text-body font-semibold text-fg">
-            {showPrefs ? 'Notification settings' : 'Inbox'}
+            {showPrefs ? 'Notification settings' : 'Notifications'}
           </h2>
           <div className="flex items-center gap-1">
             {!showPrefs && notificationCount > 0 && (
@@ -197,7 +198,7 @@ export const NotificationsDrawer: React.FC = () => {
                 <Settings size={15} />
               </button>
             )}
-            <button onClick={close} className="w-10 h-10 pointer-fine:w-7 pointer-fine:h-7 flex items-center justify-center rounded-md text-fg-faint hover:text-fg hover:bg-hover" aria-label="Close inbox">
+            <button onClick={close} className="w-10 h-10 pointer-fine:w-7 pointer-fine:h-7 flex items-center justify-center rounded-md text-fg-faint hover:text-fg hover:bg-hover" aria-label="Close notifications">
               <X size={16} />
             </button>
           </div>
@@ -230,6 +231,9 @@ export const NotificationsDrawer: React.FC = () => {
             </div>
 
             <ul className="flex-1 overflow-y-auto">
+              <li className="list-none">
+                <PhoneAlertsCard place="inbox" />
+              </li>
               {visible.length === 0 ? (
                 <li className="text-sm text-fg-muted text-center py-20 px-6">
                   {filter === 'unread' ? 'No unread notifications.' : "You're all caught up."}

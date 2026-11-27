@@ -1,10 +1,10 @@
 import React from 'react';
-import { ChevronsRight } from 'lucide-react';
+import { ChevronsRight, Search } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 
 /** Thin top bar shared by every page: sidebar toggle, breadcrumb trail and page actions. */
 export const TopBar: React.FC<{ crumbs: React.ReactNode[]; actions?: React.ReactNode }> = ({ crumbs, actions }) => {
-  const { sidebarCollapsed, setSidebarCollapsed } = useApp();
+  const { sidebarCollapsed, setSidebarCollapsed, setIsProjectPickerOpen } = useApp();
   return (
     <div className="h-11 shrink-0 flex items-center justify-between gap-2 px-3 border-b border-line bg-canvas">
       <div className="flex items-center gap-1 min-w-0">
@@ -34,7 +34,17 @@ export const TopBar: React.FC<{ crumbs: React.ReactNode[]; actions?: React.React
           </ol>
         </nav>
       </div>
-      {actions && <div className="flex items-center gap-1 shrink-0">{actions}</div>}
+      <div className="flex items-center gap-1 shrink-0">
+        {actions}
+        {/* Phones: search lives up here (the bottom bar has Home, tasks, projects, alerts, menu) */}
+        <button
+          onClick={() => setIsProjectPickerOpen(true)}
+          className="lg:hidden w-10 h-10 flex items-center justify-center rounded-md text-fg-muted hover:bg-hover hover:text-fg"
+          aria-label="Search"
+        >
+          <Search size={18} />
+        </button>
+      </div>
     </div>
   );
 };
@@ -52,10 +62,10 @@ export const PageShell: React.FC<{
   <div className="flex-1 flex flex-col min-h-0">
     <TopBar crumbs={[crumb ?? title]} actions={topActions} />
     <div className="flex-1 overflow-y-auto">
-      <div className={`mx-auto px-4 sm:px-8 lg:px-12 py-6 sm:py-8 ${width === 'narrow' ? 'max-w-4xl' : 'max-w-6xl'}`}>
-        <header className="flex flex-wrap items-end justify-between gap-4 mb-6">
+      <div className={`mx-auto px-4 sm:px-8 lg:px-12 py-4 sm:py-8 ${width === 'narrow' ? 'max-w-4xl' : 'max-w-6xl'}`}>
+        <header className="flex flex-wrap items-end justify-between gap-3 sm:gap-4 mb-4 sm:mb-6">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-fg">{title}</h1>
+            <h1 className="text-xl sm:text-2xl font-semibold tracking-tight text-fg">{title}</h1>
             {description && <p className="text-sm text-fg-muted mt-1">{description}</p>}
           </div>
           {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}

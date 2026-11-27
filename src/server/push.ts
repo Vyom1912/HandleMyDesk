@@ -22,10 +22,8 @@ function loadKeys(): VapidKeys | null {
   const { VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY } = process.env;
   if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) return { publicKey: VAPID_PUBLIC_KEY, privateKey: VAPID_PRIVATE_KEY };
   if (IS_TEST) return null;
-  if (IS_PROD) {
-    console.warn('Phone notifications are off: set VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY to turn them on. See DEPLOY.md.');
-    return null;
-  }
+  // Without settings, a key pair is made once and kept with the data (copied to the cloud database
+  // when DATABASE_URL is set, so it survives restarts). Phones then keep getting notifications.
   const file = path.join(DATA_DIR, '.vapid.json');
   try {
     return JSON.parse(fs.readFileSync(file, 'utf-8'));
@@ -33,6 +31,9 @@ function loadKeys(): VapidKeys | null {
     const keys = webpush.generateVAPIDKeys();
     fs.mkdirSync(DATA_DIR, { recursive: true });
     fs.writeFileSync(file, JSON.stringify(keys));
+    if (IS_PROD && !process.env.DATABASE_URL) {
+      console.warn('Phone notifications: made new keys in DATA_DIR. Without a disk or DATABASE_URL they are lost on restart, and phones must turn notifications on again.');
+    }
     return keys;
   }
 }

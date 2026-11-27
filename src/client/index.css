@@ -330,3 +330,10 @@ input[type="date"]::-webkit-calendar-picker-indicator {
     margin: 18mm 16mm;
   }
 }
+
+/* Things that only make sense with a mouse and keyboard */
+@media (pointer: coarse) {
+  .touch-hidden {
+    display: none !important;
+  }
+}

@@ -73,7 +73,7 @@ export const GlobalTasksView: React.FC = () => {
       description="Your work across every project, by due date"
       width="narrow"
       actions={
-        <Button
+        <Button className="touch-hidden"
           variant="secondary"
           onClick={() =>
             downloadCsv(`/api/tasks/export.csv${filter === 'assigned_to_me' ? '?filter=assigned_to_me' : ''}`, filter === 'assigned_to_me' ? 'my-tasks' : 'tasks').catch((err) => showToast(err.message, 'error'))

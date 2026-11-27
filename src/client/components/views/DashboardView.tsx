@@ -7,6 +7,39 @@ import { Avatar, PriorityBadge, StatusDot, formatDate, isOverdue } from '../ui/B
 import { Button } from '../ui/Field';
 import { PageShell } from '../layout/PageShell';
 import { GettingStarted } from './GettingStarted';
+import { PhoneAlertsCard } from '../ui/PhoneAlerts';
+import { AlertTriangle, CalendarClock, CalendarDays } from 'lucide-react';
+
+const isoDay = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+/** The first thing on Home: what needs attention today, in colour. Each opens My tasks. */
+const TodayStrip: React.FC<{ tasks: Task[]; onOpen: () => void }> = ({ tasks, onOpen }) => {
+  const today = isoDay(new Date());
+  const weekEnd = isoDay(new Date(Date.now() + 7 * 86400000));
+  const overdue = tasks.filter((t) => t.dueDate && t.dueDate < today).length;
+  const dueToday = tasks.filter((t) => t.dueDate === today).length;
+  const thisWeek = tasks.filter((t) => t.dueDate > today && t.dueDate <= weekEnd).length;
+  const items = [
+    { n: overdue, label: 'Overdue', icon: AlertTriangle, tone: overdue ? 'bg-tone-red-bg text-tone-red-fg border-transparent' : '' },
+    { n: dueToday, label: 'Due today', icon: CalendarClock, tone: dueToday ? 'bg-tone-amber-bg text-tone-amber-fg border-transparent' : '' },
+    { n: thisWeek, label: 'This week', icon: CalendarDays, tone: thisWeek ? 'bg-tone-blue-bg text-tone-blue-fg border-transparent' : '' },
+  ];
+  return (
+    <div className="grid grid-cols-3 gap-2 mb-6" role="group" aria-label="Your tasks by due date">
+      {items.map(({ n, label, icon: Icon, tone }) => (
+        <button
+          key={label}
+          onClick={onOpen}
+          className={`flex flex-col items-start gap-1 rounded-xl border p-3 text-left ${tone || 'border-line text-fg-muted'} hover:opacity-90`}
+        >
+          <Icon size={16} aria-hidden="true" />
+          <span className="text-2xl font-semibold tabular-nums leading-none">{n}</span>
+          <span className="text-meta font-medium">{label}</span>
+        </button>
+      ))}
+    </div>
+  );
+};
 
 const SectionTitle: React.FC<{ children: React.ReactNode; action?: React.ReactNode }> = ({ children, action }) => (
   <div className="flex items-center justify-between mb-2">
@@ -59,15 +92,18 @@ export const DashboardView: React.FC = () => {
         </p>
       )}
 
+      {stats && <TodayStrip tasks={myTasks} onOpen={() => navigate({ view: 'tasks' })} />}
+      <PhoneAlertsCard place="home" />
       <GettingStarted />
 
       {/* Key numbers */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 border border-line rounded-lg divide-x divide-line mb-10 overflow-hidden">
+      <div className={`grid grid-cols-2 ${canCreate ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} border border-line rounded-lg divide-x divide-line mb-8 sm:mb-10 overflow-hidden`}>
         {[
           { label: 'My open tasks', value: stats?.myPendingTasksCount, onClick: () => navigate({ view: 'tasks' }) },
           { label: 'Active projects', value: stats?.activeProjectsCount, onClick: () => navigate({ view: 'projects' }) },
           { label: 'Open across my projects', value: stats?.allPendingTasksCount },
-          { label: 'Budget used', value: stats ? `${money(stats.totalSpent)} / ${money(stats.totalBudget)}` : undefined },
+          // Money is for administrators and project managers
+          ...(canCreate ? [{ label: 'Budget used', value: stats ? `${money(stats.totalSpent)} / ${money(stats.totalBudget)}` : undefined }] : []),
         ].map((k, i) => {
           const body = (
             <>
@@ -108,7 +144,7 @@ export const DashboardView: React.FC = () => {
                   const overdue = isOverdue(task.dueDate, false);
                   return (
                     <li key={task.id}>
-                      <button onClick={() => openProject(task.projectId, 'tasks', task.id)} className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-subtle">
+                      <button onClick={() => openProject(task.projectId, 'tasks', task.id)} className="w-full flex items-center gap-3 px-3 py-3 pointer-fine:py-2 text-left hover:bg-subtle">
                         <StatusDot status={task.status} />
                         <span className="flex-1 min-w-0">
                           <span className="block text-sm text-fg truncate">{task.title}</span>
@@ -134,7 +170,7 @@ export const DashboardView: React.FC = () => {
               <ul className="border border-line rounded-lg divide-y divide-line">
                 {stats?.urgentTasks.map((task) => (
                   <li key={task.id}>
-                    <button onClick={() => openProject(task.projectId, 'tasks', task.id)} className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-subtle">
+                    <button onClick={() => openProject(task.projectId, 'tasks', task.id)} className="w-full flex items-center gap-3 px-3 py-3 pointer-fine:py-2 text-left hover:bg-subtle">
                       <Avatar src={task.assigneeAvatar} name={task.assigneeName} size={20} />
                       <span className="flex-1 min-w-0">
                         <span className="block text-sm text-fg truncate">{task.title}</span>

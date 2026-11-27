@@ -8,6 +8,8 @@ import { isOwnerSession } from './services/api';
 import { applyTheme, storedTheme } from './services/appearance';
 import './index.css';
 import { registerServiceWorker } from './services/push';
+// Catches the browser's "Install app" offer early, so the app can show its own button later
+import './services/install';
 
 // Before the first paint, so dark mode doesn't flash white
 applyTheme(storedTheme());

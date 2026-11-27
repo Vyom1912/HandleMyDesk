@@ -16,12 +16,17 @@ self.addEventListener('push', (event) => {
   event.waitUntil(
     self.registration.showNotification(data.title || 'HandleMyDesk', {
       body: data.body || '',
-      icon: '/icons/icon-192.png',
+      icon: '/icons/icon-192.png?v=2',
       badge: '/icons/badge-96.png',
       tag: data.tag,
+      // A newer notification about the same thing still buzzes the phone
+      renotify: !!data.tag,
+      vibrate: [120, 60, 120],
       data: { url: data.url || '/' },
     })
   );
+  // Show that something is waiting on the app icon (the app sets the exact count when opened)
+  if (self.navigator && 'setAppBadge' in self.navigator) self.navigator.setAppBadge().catch(() => {});
 });
 
 self.addEventListener('notificationclick', (event) => {

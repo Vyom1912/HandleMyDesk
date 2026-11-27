@@ -41,7 +41,7 @@ export const ProjectDirectoryView: React.FC = () => {
       description={`${projects.length} projects you can access`}
       actions={
         <>
-          <Button variant="secondary" onClick={() => downloadCsv('/api/projects/export.csv', 'projects').catch((err) => showToast(err.message, 'error'))} title="All projects you can see, as a spreadsheet">
+          <Button variant="secondary" className="touch-hidden" onClick={() => downloadCsv('/api/projects/export.csv', 'projects').catch((err) => showToast(err.message, 'error'))} title="All projects you can see, as a spreadsheet">
             <Download size={15} /> Export CSV
           </Button>
           {canCreate && (
